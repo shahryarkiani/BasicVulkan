@@ -67,6 +67,7 @@ class HelloTriangleApplication {
   std::vector<vk::Semaphore> renderFinishedSemaphores;
   std::vector<vk::Fence> inFlightFences;
   uint32_t currentFrameIndex = 0;
+  bool framebufferResized = false;
 
   static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -74,9 +75,16 @@ class HelloTriangleApplication {
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan C++", nullptr, nullptr);
+    glfwSetWindowUserPointer(window, this);
+    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+  }
+
+  static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+    const auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+    app->framebufferResized = true;
   }
 
   void initVulkan() {
@@ -111,8 +119,6 @@ class HelloTriangleApplication {
     for (size_t i = 0; i < swapChainImages.size(); i++) {
       renderFinishedSemaphores[i] = device.createSemaphore(semaphoreInfo);
     }
-
-
   }
 
   void createCommandBuffers() {
@@ -217,11 +223,13 @@ class HelloTriangleApplication {
 
     vk::SubpassDependency dependency;
     dependency.setSrcSubpass(vk::SubpassExternal);
-    dependency.setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    dependency.setSrcStageMask(
+        vk::PipelineStageFlagBits::eColorAttachmentOutput);
     dependency.setSrcAccessMask(vk::AccessFlagBits::eNone);
 
     dependency.setDstSubpass(0);
-    dependency.setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    dependency.setDstStageMask(
+        vk::PipelineStageFlagBits::eColorAttachmentOutput);
     dependency.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
 
     renderPassInfo.setDependencies(dependency);
@@ -373,6 +381,30 @@ class HelloTriangleApplication {
     swapChainImages = device.getSwapchainImagesKHR(swapChain);
   }
 
+  void recreateSwapChain() {
+    device.waitIdle();
+
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window, &width, &height);
+    while (width == 0 || height == 0) {
+      glfwGetFramebufferSize(window, &width, &height);
+      glfwWaitEvents();
+    }
+
+    cleanupSwapChain();
+    createSwapChain();
+    createImageViews();
+    createFramebuffers();
+  }
+
+  void cleanupSwapChain() {
+    for (auto framebuffer : swapChainFramebuffers) device.destroy(framebuffer);
+
+    for (auto imageView : swapChainImageViews) device.destroy(imageView);
+
+    device.destroySwapchainKHR(swapChain);
+  }
+
   void createSurface() {
     VkSurfaceKHR tempSurface;
     if (glfwCreateWindowSurface(instance, window, nullptr, &tempSurface) !=
@@ -391,10 +423,10 @@ class HelloTriangleApplication {
     device.waitIdle();
   }
 
-  void drawFrame()  {
-    auto result = device.waitForFences(inFlightFences[currentFrameIndex], vk::True,
-                                       std::numeric_limits<uint64_t>::max());
-    device.resetFences(inFlightFences[currentFrameIndex]);
+  void drawFrame() {
+    auto result =
+    device.waitForFences(inFlightFences[currentFrameIndex], vk::True,
+                         std::numeric_limits<uint64_t>::max());
 
     if (result != vk::Result::eSuccess) {
       throw std::runtime_error("Failed to wait for inFlightFence");
@@ -405,9 +437,16 @@ class HelloTriangleApplication {
         swapChain, std::numeric_limits<uint64_t>::max(),
         imageAvailableSemaphores[currentFrameIndex]);
 
-    if (result != vk::Result::eSuccess) {
+    if (result == vk::Result::eErrorOutOfDateKHR) {
+      recreateSwapChain();
+      return;
+    } else if (result != vk::Result::eSuccess &&
+               result != vk::Result::eSuboptimalKHR) {
       throw std::runtime_error("Failed to acquire next image index");
     }
+    // If we reset the fence, but return after recreating the swap chain
+    // We have a deadlock scenario
+    device.resetFences(inFlightFences[currentFrameIndex]);
 
     commandBuffers[currentFrameIndex].reset();
     recordCommandBuffer(commandBuffers[currentFrameIndex], nextImageIndex);
@@ -415,7 +454,8 @@ class HelloTriangleApplication {
     vk::SubmitInfo submitInfo;
     submitInfo.setWaitSemaphores(imageAvailableSemaphores[currentFrameIndex]);
 
-    vk::PipelineStageFlags waitStages(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    vk::PipelineStageFlags waitStages(
+        vk::PipelineStageFlagBits::eColorAttachmentOutput);
     submitInfo.setPWaitDstStageMask(&waitStages);
 
     submitInfo.setCommandBuffers(commandBuffers[currentFrameIndex]);
@@ -432,33 +472,29 @@ class HelloTriangleApplication {
 
     result = presentQueue.presentKHR(presentInfo);
 
-    if (result != vk::Result::eSuccess) {
-      throw std::runtime_error("Failed to submit present command");
+    if (result == vk::Result::eErrorOutOfDateKHR || framebufferResized) {
+      recreateSwapChain();
+    } else if (result != vk::Result::eSuccess &&
+               result != vk::Result::eSuboptimalKHR) {
+      throw std::runtime_error("Failed to acquire next image index");
     }
 
     currentFrameIndex++;
     currentFrameIndex %= MAX_FRAMES_IN_FLIGHT;
   }
 
-  void cleanup() const {
+  void cleanup() {
     for (auto semaphore : imageAvailableSemaphores) device.destroy(semaphore);
     for (auto semaphore : renderFinishedSemaphores) device.destroy(semaphore);
     for (auto fence : inFlightFences) device.destroy(fence);
     device.destroyCommandPool(commandPool);
 
-    for (const auto &framebuffer : swapChainFramebuffers) {
-      device.destroyFramebuffer(framebuffer);
-    }
+    cleanupSwapChain();
 
     device.destroyPipeline(graphicsPipeline);
     device.destroyPipelineLayout(pipelineLayout);
     device.destroyRenderPass(renderPass);
 
-    for (const auto &imageView : swapChainImageViews) {
-      device.destroyImageView(imageView);
-    }
-
-    device.destroySwapchainKHR(swapChain);
     device.destroy();
     if (instance) {
       instance.destroySurfaceKHR(surface);
@@ -733,4 +769,4 @@ int main() {
   }
 
   return EXIT_SUCCESS;
-}
+};
