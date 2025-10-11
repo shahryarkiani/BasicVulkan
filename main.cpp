@@ -560,7 +560,7 @@ class HelloTriangleApplication {
 
     for (uint32_t queueFamily : uniqueQueueFamilies) {
       vk::DeviceQueueCreateInfo queueCreateInfo({}, queueFamily, 1);
-      queueCreateInfo.pQueuePriorities = &queuePriority;
+      queueCreateInfo.setPQueuePriorities(&queuePriority);
 
       queueCreateInfos.push_back(queueCreateInfo);
     }
@@ -568,19 +568,8 @@ class HelloTriangleApplication {
     vk::PhysicalDeviceFeatures deviceFeatures{};
 
     vk::DeviceCreateInfo createInfo;
-    createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.queueCreateInfoCount =
-        static_cast<uint32_t>(queueCreateInfos.size());
-
-    createInfo.pEnabledFeatures = &deviceFeatures;
-
-    if (enableValidationLayers) {
-      createInfo.enabledLayerCount =
-          static_cast<uint32_t>(validationLayers.size());
-      createInfo.ppEnabledLayerNames = validationLayers.data();
-    } else {
-      createInfo.enabledLayerCount = 0;
-    }
+    createInfo.setQueueCreateInfos(queueCreateInfos);
+    createInfo.setPEnabledFeatures(&deviceFeatures);
 
     createInfo.enabledExtensionCount = deviceExtensions.size();
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
