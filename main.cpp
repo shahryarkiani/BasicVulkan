@@ -96,18 +96,20 @@ class HelloTriangleApplication {
 
   void createSyncObjects() {
     imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    inFlightFences.reserve(MAX_FRAMES_IN_FLIGHT);
-
+    renderFinishedSemaphores.resize(swapChainImages.size());
+    inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     vk::FenceCreateInfo fenceInfo;
     fenceInfo.setFlags(vk::FenceCreateFlagBits::eSignaled);
 
+    vk::SemaphoreCreateInfo semaphoreInfo;
+
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      vk::SemaphoreCreateInfo semaphoreInfo;
       imageAvailableSemaphores[i] = device.createSemaphore(semaphoreInfo);
-      renderFinishedSemaphores[i] = device.createSemaphore(semaphoreInfo);
       inFlightFences[i] = device.createFence(fenceInfo);
+    }
+    for (size_t i = 0; i < swapChainImages.size(); i++) {
+      renderFinishedSemaphores[i] = device.createSemaphore(semaphoreInfo);
     }
 
 
@@ -418,13 +420,13 @@ class HelloTriangleApplication {
 
     submitInfo.setCommandBuffers(commandBuffers[currentFrameIndex]);
 
-    submitInfo.setSignalSemaphores(renderFinishedSemaphores[currentFrameIndex]);
+    submitInfo.setSignalSemaphores(renderFinishedSemaphores[nextImageIndex]);
 
     graphicsQueue.submit(submitInfo, inFlightFences[currentFrameIndex]);
 
     vk::PresentInfoKHR presentInfo;
 
-    presentInfo.setWaitSemaphores(renderFinishedSemaphores[currentFrameIndex]);
+    presentInfo.setWaitSemaphores(renderFinishedSemaphores[nextImageIndex]);
     presentInfo.setSwapchains(swapChain);
     presentInfo.setImageIndices(nextImageIndex);
 
@@ -439,9 +441,9 @@ class HelloTriangleApplication {
   }
 
   void cleanup() const {
-    for (auto& semaphore : imageAvailableSemaphores) device.destroy(semaphore);
-    for (auto& semaphore : renderFinishedSemaphores) device.destroy(semaphore);
-    for (auto& fence : inFlightFences) device.destroy(fence);
+    for (auto semaphore : imageAvailableSemaphores) device.destroy(semaphore);
+    for (auto semaphore : renderFinishedSemaphores) device.destroy(semaphore);
+    for (auto fence : inFlightFences) device.destroy(fence);
     device.destroyCommandPool(commandPool);
 
     for (const auto &framebuffer : swapChainFramebuffers) {
