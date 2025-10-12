@@ -83,7 +83,7 @@ class HelloTriangleApplication {
   }
 
   static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-    const auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+    const auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
     app->framebufferResized = true;
   }
 
@@ -260,12 +260,6 @@ class HelloTriangleApplication {
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyInfo(
         {}, vk::PrimitiveTopology::eTriangleList, vk::False);
-
-    vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChainExtent.width),
-                          static_cast<float>(swapChainExtent.height), 0.0f,
-                          1.0f);
-
-    vk::Rect2D scissor({}, swapChainExtent);
 
     vk::PipelineViewportStateCreateInfo viewportStateCreateInfo({}, 1, {}, 1,
                                                                 {});
