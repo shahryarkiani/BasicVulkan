@@ -9,6 +9,8 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
+
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
 
 constexpr uint32_t WIDTH = 800;
@@ -25,6 +27,36 @@ const bool enableValidationLayers = false;
 #else
 constexpr bool enableValidationLayers = true;
 #endif
+
+struct Vertex {
+  glm::vec2 pos;
+  glm::vec3 color;
+
+  static vk::VertexInputBindingDescription getBindingDescription() {
+    vk::VertexInputBindingDescription bindingDescription;
+    bindingDescription.setBinding(0);
+    bindingDescription.setStride(sizeof(Vertex));
+    bindingDescription.setInputRate(vk::VertexInputRate::eVertex);
+
+    return bindingDescription;
+  }
+
+  static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
+    vk::VertexInputAttributeDescription posDescription;
+    posDescription.setBinding(0);
+    posDescription.setLocation(0);
+    posDescription.setFormat(vk::Format::eR32G32Sfloat);
+    posDescription.setOffset(offsetof(Vertex, pos));
+
+    vk::VertexInputAttributeDescription colorDescription;
+    colorDescription.setBinding(0);
+    colorDescription.setLocation(1);
+    colorDescription.setFormat(vk::Format::eR32G32B32Sfloat);
+    colorDescription.setOffset(offsetof(Vertex, color));
+
+    return {posDescription, colorDescription};
+  }
+};
 
 class HelloTriangleApplication {
  public:
@@ -130,9 +162,9 @@ class HelloTriangleApplication {
     commandBuffers = device.allocateCommandBuffers(allocInfo);
   }
 
-  void recordCommandBuffer(vk::CommandBuffer commandBuffer,
-                           uint32_t imageIndex) {
-    vk::CommandBufferBeginInfo beginInfo{};
+  void recordCommandBuffer(const vk::CommandBuffer commandBuffer,
+                           const uint32_t imageIndex) const {
+    constexpr vk::CommandBufferBeginInfo beginInfo{};
     commandBuffer.begin(beginInfo);
 
     vk::RenderPassBeginInfo renderPassInfo{};
@@ -171,13 +203,13 @@ class HelloTriangleApplication {
   }
 
   void createCommandPool() {
-    auto queueFamilyIndices = findQueueFamilies(physicalDevice);
+    auto [graphicsFamily, presentFamily] = findQueueFamilies(physicalDevice);
 
     vk::CommandPoolCreateInfo commandPoolInfo;
     commandPoolInfo.setFlags(
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
     commandPoolInfo.setQueueFamilyIndex(
-        queueFamilyIndices.graphicsFamily.value());
+        graphicsFamily.value());
 
     commandPool = device.createCommandPool(commandPoolInfo);
   }
@@ -255,8 +287,13 @@ class HelloTriangleApplication {
                                  vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo dynamicState;
     dynamicState.setDynamicStates(dynamicStates);
-    // We are hardcoding the vertex inputs, so empty for everything
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo({}, {}, {});
+
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
+    auto bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+    vertexInputInfo.setVertexBindingDescriptions(bindingDescription);
+    vertexInputInfo.setVertexAttributeDescriptions(attributeDescriptions);
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyInfo(
         {}, vk::PrimitiveTopology::eTriangleList, vk::False);
@@ -337,14 +374,14 @@ class HelloTriangleApplication {
   }
 
   void createSwapChain() {
-    SwapChainSupportDetails swapChainSupport =
+    const SwapChainSupportDetails swapChainSupport =
         querySwapChainSupport(physicalDevice);
 
-    vk::SurfaceFormatKHR surfaceFormat =
-        chooseSwapSurfaceFormat(swapChainSupport.formats);
-    vk::PresentModeKHR presentMode =
+    const vk::SurfaceFormatKHR surfaceFormat =
+        chooseSwapSurfaceFormat(swapChainSupport.formats);~
+    const vk::PresentModeKHR presentMode =
         chooseSwapPresentMode(swapChainSupport.presentModes);
-    vk::Extent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+    const vk::Extent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
 
@@ -354,16 +391,16 @@ class HelloTriangleApplication {
     }
 
     vk::SharingMode sharingMode = vk::SharingMode::eExclusive;
-    QueueFamilyIndices queueIndices = findQueueFamilies(physicalDevice);
+    const auto [graphicsFamily, presentFamily] = findQueueFamilies(physicalDevice);
     std::vector<uint32_t> queueIndicesList;
 
-    if (queueIndices.graphicsFamily != queueIndices.presentFamily) {
-      queueIndicesList = {queueIndices.graphicsFamily.value(),
-                          queueIndices.presentFamily.value()};
+    if (graphicsFamily != presentFamily) {
+      queueIndicesList = {graphicsFamily.value(),
+                          presentFamily.value()};
       sharingMode = vk::SharingMode::eConcurrent;
     }
 
-    vk::SwapchainCreateInfoKHR swapChainCreateInfo(
+    const vk::SwapchainCreateInfoKHR swapChainCreateInfo(
         {}, surface, imageCount, surfaceFormat.format, surfaceFormat.colorSpace,
         extent, 1, vk::ImageUsageFlagBits::eColorAttachment, sharingMode,
         queueIndicesList, swapChainSupport.capabilities.currentTransform,
@@ -391,10 +428,10 @@ class HelloTriangleApplication {
     createFramebuffers();
   }
 
-  void cleanupSwapChain() {
-    for (auto framebuffer : swapChainFramebuffers) device.destroy(framebuffer);
+  void cleanupSwapChain() const {
+    for (const auto framebuffer : swapChainFramebuffers) device.destroy(framebuffer);
 
-    for (auto imageView : swapChainImageViews) device.destroy(imageView);
+    for (const auto imageView : swapChainImageViews) device.destroy(imageView);
 
     device.destroySwapchainKHR(swapChain);
   }
@@ -448,7 +485,7 @@ class HelloTriangleApplication {
     vk::SubmitInfo submitInfo;
     submitInfo.setWaitSemaphores(imageAvailableSemaphores[currentFrameIndex]);
 
-    vk::PipelineStageFlags waitStages(
+    constexpr vk::PipelineStageFlags waitStages(
         vk::PipelineStageFlagBits::eColorAttachmentOutput);
     submitInfo.setPWaitDstStageMask(&waitStages);
 
@@ -477,7 +514,7 @@ class HelloTriangleApplication {
     currentFrameIndex %= MAX_FRAMES_IN_FLIGHT;
   }
 
-  void cleanup() {
+  void cleanup() const {
     for (auto semaphore : imageAvailableSemaphores) device.destroy(semaphore);
     for (auto semaphore : renderFinishedSemaphores) device.destroy(semaphore);
     for (auto fence : inFlightFences) device.destroy(fence);
@@ -571,9 +608,9 @@ class HelloTriangleApplication {
       throw std::runtime_error("No physical devices found");
     }
 
-    for (const auto &device : devices) {
-      if (isDeviceSuitable(device)) {
-        physicalDevice = device;
+    for (const auto &candidateDevice : devices) {
+      if (isDeviceSuitable(candidateDevice)) {
+        physicalDevice = candidateDevice;
         return;
       }
     }
@@ -612,13 +649,13 @@ class HelloTriangleApplication {
     presentQueue = device.getQueue(indices.presentFamily.value(), 0);
   }
 
-  [[nodiscard]] bool isDeviceSuitable(vk::PhysicalDevice physicalDevice) const {
-    const auto indices = findQueueFamilies(physicalDevice);
+  [[nodiscard]] bool isDeviceSuitable(vk::PhysicalDevice physDevice) const {
+    const auto indices = findQueueFamilies(physDevice);
 
     const bool extensionsSupported =
-        checkDeviceExtensionSupport(physicalDevice);
+        checkDeviceExtensionSupport(physDevice);
 
-    const auto swapChainSupport = querySwapChainSupport(physicalDevice);
+    const auto swapChainSupport = querySwapChainSupport(physDevice);
 
     return indices.isComplete() && swapChainSupport.isSuitable() &&
            extensionsSupported;
@@ -648,11 +685,11 @@ class HelloTriangleApplication {
   };
 
   [[nodiscard]] QueueFamilyIndices findQueueFamilies(
-      vk::PhysicalDevice device) const {
+      const vk::PhysicalDevice physDevice) const {
     QueueFamilyIndices indices;
 
     std::vector<vk::QueueFamilyProperties> queueFamilies =
-        device.getQueueFamilyProperties();
+        physDevice.getQueueFamilyProperties();
 
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
       auto &queueFamily = queueFamilies[i];
@@ -661,7 +698,7 @@ class HelloTriangleApplication {
         indices.graphicsFamily = i;
       }
 
-      if (device.getSurfaceSupportKHR(i, surface) == vk::True) {
+      if (physDevice.getSurfaceSupportKHR(i, surface) == vk::True) {
         indices.presentFamily = i;
       }
     }
@@ -680,12 +717,12 @@ class HelloTriangleApplication {
   };
 
   [[nodiscard]] SwapChainSupportDetails querySwapChainSupport(
-      vk::PhysicalDevice physicalDevice) const {
+      vk::PhysicalDevice physDevice) const {
     SwapChainSupportDetails details;
 
-    details.capabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface);
-    details.formats = physicalDevice.getSurfaceFormatsKHR(surface);
-    details.presentModes = physicalDevice.getSurfacePresentModesKHR(surface);
+    details.capabilities = physDevice.getSurfaceCapabilitiesKHR(surface);
+    details.formats = physDevice.getSurfaceFormatsKHR(surface);
+    details.presentModes = physDevice.getSurfacePresentModesKHR(surface);
 
     return details;
   }
