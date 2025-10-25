@@ -142,7 +142,7 @@ class HelloTriangleApplication {
     vk::FenceCreateInfo fenceInfo;
     fenceInfo.setFlags(vk::FenceCreateFlagBits::eSignaled);
 
-    vk::SemaphoreCreateInfo semaphoreInfo;
+    constexpr vk::SemaphoreCreateInfo semaphoreInfo;
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
       imageAvailableSemaphores[i] = device.createSemaphore(semaphoreInfo);
@@ -374,23 +374,23 @@ class HelloTriangleApplication {
   }
 
   void createSwapChain() {
-    const SwapChainSupportDetails swapChainSupport =
+    const auto [capabilities, formats, presentModes] =
         querySwapChainSupport(physicalDevice);
 
     const vk::SurfaceFormatKHR surfaceFormat =
-        chooseSwapSurfaceFormat(swapChainSupport.formats);~
+        chooseSwapSurfaceFormat(formats);
     const vk::PresentModeKHR presentMode =
-        chooseSwapPresentMode(swapChainSupport.presentModes);
-    const vk::Extent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+        chooseSwapPresentMode(presentModes);
+    const vk::Extent2D extent = chooseSwapExtent(capabilities);
 
-    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+    uint32_t imageCount = capabilities.minImageCount + 1;
 
-    if (swapChainSupport.capabilities.maxImageCount > 0 &&
-        imageCount > swapChainSupport.capabilities.maxImageCount) {
-      imageCount = swapChainSupport.capabilities.maxImageCount;
+    if (capabilities.maxImageCount > 0 &&
+        imageCount > capabilities.maxImageCount) {
+      imageCount = capabilities.maxImageCount;
     }
 
-    vk::SharingMode sharingMode = vk::SharingMode::eExclusive;
+    auto sharingMode = vk::SharingMode::eExclusive;
     const auto [graphicsFamily, presentFamily] = findQueueFamilies(physicalDevice);
     std::vector<uint32_t> queueIndicesList;
 
@@ -403,7 +403,7 @@ class HelloTriangleApplication {
     const vk::SwapchainCreateInfoKHR swapChainCreateInfo(
         {}, surface, imageCount, surfaceFormat.format, surfaceFormat.colorSpace,
         extent, 1, vk::ImageUsageFlagBits::eColorAttachment, sharingMode,
-        queueIndicesList, swapChainSupport.capabilities.currentTransform,
+        queueIndicesList, capabilities.currentTransform,
         vk::CompositeAlphaFlagBitsKHR::eOpaque, presentMode, vk::True);
     swapChain = device.createSwapchainKHR(swapChainCreateInfo);
 
@@ -515,9 +515,9 @@ class HelloTriangleApplication {
   }
 
   void cleanup() const {
-    for (auto semaphore : imageAvailableSemaphores) device.destroy(semaphore);
-    for (auto semaphore : renderFinishedSemaphores) device.destroy(semaphore);
-    for (auto fence : inFlightFences) device.destroy(fence);
+    for (const auto semaphore : imageAvailableSemaphores) device.destroy(semaphore);
+    for (const auto semaphore : renderFinishedSemaphores) device.destroy(semaphore);
+    for (const auto fence : inFlightFences) device.destroy(fence);
     device.destroyCommandPool(commandPool);
 
     cleanupSwapChain();
@@ -542,7 +542,7 @@ class HelloTriangleApplication {
           "Validation Enabled, but missing support for validation layers");
     }
 
-    std::vector<vk::ExtensionProperties> extensionProperties =
+    const std::vector<vk::ExtensionProperties> extensionProperties =
         vk::enumerateInstanceExtensionProperties();
 
     std::cout << "available instance extensions:\n";
@@ -550,7 +550,7 @@ class HelloTriangleApplication {
       std::cout << '\t' << extension.extensionName << '\n';
     }
 
-    vk::ApplicationInfo appInfo("Hello Triangle", VK_MAKE_VERSION(1, 0, 0),
+    constexpr vk::ApplicationInfo appInfo("Hello Triangle", VK_MAKE_VERSION(1, 0, 0),
                                 "No Engine", VK_MAKE_VERSION(1, 0, 0),
                                 VK_API_VERSION_1_0);
 
@@ -585,7 +585,7 @@ class HelloTriangleApplication {
     std::vector<vk::LayerProperties> availableLayers =
         vk::enumerateInstanceLayerProperties();
 
-    for (auto layerName : validationLayers) {
+    for (const auto layerName : validationLayers) {
       bool layerFound = false;
 
       for (auto &layerProperty : availableLayers) {
@@ -601,7 +601,7 @@ class HelloTriangleApplication {
   }
 
   void pickPhysicalDevice() {
-    std::vector<vk::PhysicalDevice> devices =
+    const std::vector<vk::PhysicalDevice> devices =
         instance.enumeratePhysicalDevices();
 
     if (devices.empty()) {
@@ -619,12 +619,12 @@ class HelloTriangleApplication {
   }
 
   void createLogicalDevice() {
-    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+    auto [graphicsFamily, presentFamily] = findQueueFamilies(physicalDevice);
 
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
 
-    std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
-                                              indices.presentFamily.value()};
+    std::set<uint32_t> uniqueQueueFamilies = {graphicsFamily.value(),
+                                              presentFamily.value()};
     float queuePriority = 1.0f;
 
     for (uint32_t queueFamily : uniqueQueueFamilies) {
@@ -645,11 +645,12 @@ class HelloTriangleApplication {
 
     device = physicalDevice.createDevice(createInfo);
 
-    graphicsQueue = device.getQueue(indices.graphicsFamily.value(), 0);
-    presentQueue = device.getQueue(indices.presentFamily.value(), 0);
+    graphicsQueue = device.getQueue(graphicsFamily.value(), 0);
+    presentQueue = device.getQueue(presentFamily.value(), 0);
   }
 
-  [[nodiscard]] bool isDeviceSuitable(vk::PhysicalDevice physDevice) const {
+  [[nodiscard]] bool isDeviceSuitable(
+      const vk::PhysicalDevice physDevice) const {
     const auto indices = findQueueFamilies(physDevice);
 
     const bool extensionsSupported =
@@ -661,8 +662,9 @@ class HelloTriangleApplication {
            extensionsSupported;
   }
 
-  static bool checkDeviceExtensionSupport(vk::PhysicalDevice physicalDevice) {
-    std::vector<vk::ExtensionProperties> availableExtensions =
+  static bool checkDeviceExtensionSupport(
+      const vk::PhysicalDevice physicalDevice) {
+    const std::vector<vk::ExtensionProperties> availableExtensions =
         physicalDevice.enumerateDeviceExtensionProperties();
 
     std::set<std::string> requiredExtensions(deviceExtensions.begin(),
@@ -688,7 +690,7 @@ class HelloTriangleApplication {
       const vk::PhysicalDevice physDevice) const {
     QueueFamilyIndices indices;
 
-    std::vector<vk::QueueFamilyProperties> queueFamilies =
+    const std::vector<vk::QueueFamilyProperties> queueFamilies =
         physDevice.getQueueFamilyProperties();
 
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
@@ -717,7 +719,7 @@ class HelloTriangleApplication {
   };
 
   [[nodiscard]] SwapChainSupportDetails querySwapChainSupport(
-      vk::PhysicalDevice physDevice) const {
+      const vk::PhysicalDevice physDevice) const {
     SwapChainSupportDetails details;
 
     details.capabilities = physDevice.getSurfaceCapabilitiesKHR(surface);
@@ -778,7 +780,7 @@ class HelloTriangleApplication {
       throw std::runtime_error("failed to open file!");
     }
 
-    auto fileSize = file.tellg();
+    const auto fileSize = file.tellg();
     std::vector<char> buffer(fileSize);
 
     file.seekg(0);
