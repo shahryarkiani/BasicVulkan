@@ -4,3 +4,5 @@
 
 out/
 cmake-build-debug/
+
+shaders/*.spv

@@ -3,14 +3,13 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <glm/glm.hpp>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <set>
 #include <stdexcept>
 #include <vector>
-
-#include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
 
 constexpr uint32_t WIDTH = 800;
@@ -41,7 +40,8 @@ struct Vertex {
     return bindingDescription;
   }
 
-  static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
+  static std::array<vk::VertexInputAttributeDescription, 2>
+  getAttributeDescriptions() {
     vk::VertexInputAttributeDescription posDescription;
     posDescription.setBinding(0);
     posDescription.setLocation(0);
@@ -98,6 +98,16 @@ class HelloTriangleApplication {
   std::vector<vk::Semaphore> imageAvailableSemaphores;
   std::vector<vk::Semaphore> renderFinishedSemaphores;
   std::vector<vk::Fence> inFlightFences;
+
+  vk::Buffer vertexBuffer;
+  vk::DeviceMemory vertexBufferMemory;
+
+  const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+  };
+
   uint32_t currentFrameIndex = 0;
   bool framebufferResized = false;
 
@@ -114,8 +124,10 @@ class HelloTriangleApplication {
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
   }
 
-  static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-    const auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+  static void framebufferResizeCallback(GLFWwindow *window, int width,
+                                        int height) {
+    const auto app = static_cast<HelloTriangleApplication *>(
+        glfwGetWindowUserPointer(window));
     app->framebufferResized = true;
   }
 
@@ -130,8 +142,58 @@ class HelloTriangleApplication {
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
+    createVertexBuffer();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createVertexBuffer() {
+    vk::BufferCreateInfo bufferInfo;
+    bufferInfo.setSize(sizeof(vertices[0]) * vertices.size());
+    bufferInfo.setUsage(vk::BufferUsageFlagBits::eVertexBuffer);
+    bufferInfo.setSharingMode(vk::SharingMode::eExclusive);
+
+    vertexBuffer = device.createBuffer(bufferInfo);
+
+    const vk::MemoryRequirements memRequirements =
+        device.getBufferMemoryRequirements(vertexBuffer);
+
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.setAllocationSize(memRequirements.size);
+    allocInfo.setMemoryTypeIndex(
+        findMemoryType(memRequirements.memoryTypeBits,
+                       vk::MemoryPropertyFlagBits::eHostCoherent |
+                           vk::MemoryPropertyFlagBits::eHostVisible));
+
+    vertexBufferMemory = device.allocateMemory(allocInfo);
+
+    // bind buffer to memory, with offset of 0, because it's not being shared
+    device.bindBufferMemory(vertexBuffer, vertexBufferMemory, 0);
+
+    void *data;
+    auto result =
+        device.mapMemory(vertexBufferMemory, 0, bufferInfo.size,
+                         static_cast<vk::MemoryMapFlagBits>(0), &data);
+    if (result != vk::Result::eSuccess) {
+      throw std::runtime_error("failed to map vertex buffer memory");
+    }
+    std::memcpy(data, vertices.data(), bufferInfo.size);
+    device.unmapMemory(vertexBufferMemory);
+  }
+
+  uint32_t findMemoryType(uint32_t typeFilter,
+                          vk::MemoryPropertyFlags properties) const {
+    vk::PhysicalDeviceMemoryProperties memProperties =
+        physicalDevice.getMemoryProperties();
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+      if (typeFilter & 1 << i && (memProperties.memoryTypes[i].propertyFlags &
+                                  properties) == properties) {
+        return i;
+      }
+    }
+
+    throw std::runtime_error("Unable to find suitable memory type");
   }
 
   void createSyncObjects() {
@@ -196,6 +258,8 @@ class HelloTriangleApplication {
     scissor.extent = swapChainExtent;
     commandBuffer.setScissor(0, 1, &scissor);
 
+    commandBuffer.bindVertexBuffers(0, vertexBuffer, {0});
+
     commandBuffer.draw(3, 1, 0, 0);
 
     commandBuffer.endRenderPass();
@@ -208,8 +272,7 @@ class HelloTriangleApplication {
     vk::CommandPoolCreateInfo commandPoolInfo;
     commandPoolInfo.setFlags(
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
-    commandPoolInfo.setQueueFamilyIndex(
-        graphicsFamily.value());
+    commandPoolInfo.setQueueFamilyIndex(graphicsFamily.value());
 
     commandPool = device.createCommandPool(commandPoolInfo);
   }
@@ -377,10 +440,8 @@ class HelloTriangleApplication {
     const auto [capabilities, formats, presentModes] =
         querySwapChainSupport(physicalDevice);
 
-    const vk::SurfaceFormatKHR surfaceFormat =
-        chooseSwapSurfaceFormat(formats);
-    const vk::PresentModeKHR presentMode =
-        chooseSwapPresentMode(presentModes);
+    const vk::SurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(formats);
+    const vk::PresentModeKHR presentMode = chooseSwapPresentMode(presentModes);
     const vk::Extent2D extent = chooseSwapExtent(capabilities);
 
     uint32_t imageCount = capabilities.minImageCount + 1;
@@ -391,12 +452,12 @@ class HelloTriangleApplication {
     }
 
     auto sharingMode = vk::SharingMode::eExclusive;
-    const auto [graphicsFamily, presentFamily] = findQueueFamilies(physicalDevice);
+    const auto [graphicsFamily, presentFamily] =
+        findQueueFamilies(physicalDevice);
     std::vector<uint32_t> queueIndicesList;
 
     if (graphicsFamily != presentFamily) {
-      queueIndicesList = {graphicsFamily.value(),
-                          presentFamily.value()};
+      queueIndicesList = {graphicsFamily.value(), presentFamily.value()};
       sharingMode = vk::SharingMode::eConcurrent;
     }
 
@@ -429,7 +490,8 @@ class HelloTriangleApplication {
   }
 
   void cleanupSwapChain() const {
-    for (const auto framebuffer : swapChainFramebuffers) device.destroy(framebuffer);
+    for (const auto framebuffer : swapChainFramebuffers)
+      device.destroy(framebuffer);
 
     for (const auto imageView : swapChainImageViews) device.destroy(imageView);
 
@@ -456,8 +518,8 @@ class HelloTriangleApplication {
 
   void drawFrame() {
     auto result =
-    device.waitForFences(inFlightFences[currentFrameIndex], vk::True,
-                         std::numeric_limits<uint64_t>::max());
+        device.waitForFences(inFlightFences[currentFrameIndex], vk::True,
+                             std::numeric_limits<uint64_t>::max());
 
     if (result != vk::Result::eSuccess) {
       throw std::runtime_error("Failed to wait for inFlightFence");
@@ -515,13 +577,17 @@ class HelloTriangleApplication {
   }
 
   void cleanup() const {
-    for (const auto semaphore : imageAvailableSemaphores) device.destroy(semaphore);
-    for (const auto semaphore : renderFinishedSemaphores) device.destroy(semaphore);
+    for (const auto semaphore : imageAvailableSemaphores)
+      device.destroy(semaphore);
+    for (const auto semaphore : renderFinishedSemaphores)
+      device.destroy(semaphore);
     for (const auto fence : inFlightFences) device.destroy(fence);
     device.destroyCommandPool(commandPool);
 
     cleanupSwapChain();
 
+    device.destroyBuffer(vertexBuffer);
+    device.freeMemory(vertexBufferMemory);
     device.destroyPipeline(graphicsPipeline);
     device.destroyPipelineLayout(pipelineLayout);
     device.destroyRenderPass(renderPass);
@@ -550,9 +616,9 @@ class HelloTriangleApplication {
       std::cout << '\t' << extension.extensionName << '\n';
     }
 
-    constexpr vk::ApplicationInfo appInfo("Hello Triangle", VK_MAKE_VERSION(1, 0, 0),
-                                "No Engine", VK_MAKE_VERSION(1, 0, 0),
-                                VK_API_VERSION_1_0);
+    constexpr vk::ApplicationInfo appInfo(
+        "Hello Triangle", VK_MAKE_VERSION(1, 0, 0), "No Engine",
+        VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_0);
 
     auto extensions = getRequiredExtensions();
     vk::InstanceCreateInfo createInfo;
@@ -653,8 +719,7 @@ class HelloTriangleApplication {
       const vk::PhysicalDevice physDevice) const {
     const auto indices = findQueueFamilies(physDevice);
 
-    const bool extensionsSupported =
-        checkDeviceExtensionSupport(physDevice);
+    const bool extensionsSupported = checkDeviceExtensionSupport(physDevice);
 
     const auto swapChainSupport = querySwapChainSupport(physDevice);
 

@@ -14,12 +14,14 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory("extern/glfw")
 
-# Move shaders to output directory as well
+# Compile and move shaders to output directory as well
 add_custom_target(copy_shaders ALL
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND ./compileShaders.bat
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/shaders
         ${CMAKE_BINARY_DIR}/shaders
-        COMMENT "Copying shaders to output directory"
+        COMMENT "Compiling and copying shaders to output directory"
 )
 
 add_executable(VulkTutorial "main.cpp")

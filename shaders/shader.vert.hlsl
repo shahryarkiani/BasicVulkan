@@ -3,22 +3,15 @@ struct VSOutput {
     float3 color    : COLOR;
 };
 
-static const float2 positions[3] = {
-    float2( 0.0f, -0.5f),
-    float2( 0.5f,  0.5f),
-    float2(-0.5f,  0.5f)
+struct VSInput {
+    float2 inPosition : POSITION; // layout(location = 0)
+    float3 inColor    : COLOR;    // layout(location = 1)
 };
 
-static const float3 colors[3] = {
-    float3(1.0f, 0.0f, 0.0f), // Red
-    float3(0.0f, 1.0f, 0.0f), // Green
-    float3(0.0f, 0.0f, 1.0f)  // Blue
-};
-
-VSOutput main(uint vertexID : SV_VertexID)
+VSOutput main(VSInput input)
 {
     VSOutput output;
-    output.position = float4(positions[vertexID], 0.0f, 1.0f);
-    output.color = colors[vertexID];
+    output.position = float4(input.inPosition, 0.0, 1.0);
+    output.color = input.inColor;
     return output;
 }
