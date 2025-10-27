@@ -102,11 +102,9 @@ class HelloTriangleApplication {
   vk::Buffer vertexBuffer;
   vk::DeviceMemory vertexBufferMemory;
 
-  const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
-  };
+  const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+                                        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+                                        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
   uint32_t currentFrameIndex = 0;
   bool framebufferResized = false;
@@ -148,42 +146,98 @@ class HelloTriangleApplication {
   }
 
   void createVertexBuffer() {
+    const vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+    auto [stagingBuffer, stagingBufferMemory] =
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible |
+                         vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    std::tie(vertexBuffer, vertexBufferMemory) =
+        createBuffer(bufferSize,
+                     vk::BufferUsageFlagBits::eVertexBuffer |
+                         vk::BufferUsageFlagBits::eTransferDst,
+                     vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    void *data;
+    const auto result =
+        device.mapMemory(stagingBufferMemory, 0, bufferSize,
+                         static_cast<vk::MemoryMapFlagBits>(0), &data);
+    if (result != vk::Result::eSuccess) {
+      throw std::runtime_error("failed to map staging buffer memory");
+    }
+    std::memcpy(data, vertices.data(), bufferSize);
+    device.unmapMemory(stagingBufferMemory);
+
+    copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+    device.destroyBuffer(stagingBuffer);
+    device.freeMemory(stagingBufferMemory);
+  }
+
+  [[nodiscard]] std::pair<vk::Buffer, vk::DeviceMemory> createBuffer(
+      vk::DeviceSize size, vk::BufferUsageFlags usage,
+      vk::MemoryPropertyFlags memProperties) const {
     vk::BufferCreateInfo bufferInfo;
-    bufferInfo.setSize(sizeof(vertices[0]) * vertices.size());
-    bufferInfo.setUsage(vk::BufferUsageFlagBits::eVertexBuffer);
+    bufferInfo.setSize(size);
+    bufferInfo.setUsage(usage);
     bufferInfo.setSharingMode(vk::SharingMode::eExclusive);
 
-    vertexBuffer = device.createBuffer(bufferInfo);
+    vk::Buffer buffer = device.createBuffer(bufferInfo);
 
     const vk::MemoryRequirements memRequirements =
-        device.getBufferMemoryRequirements(vertexBuffer);
+        device.getBufferMemoryRequirements(buffer);
 
     vk::MemoryAllocateInfo allocInfo;
     allocInfo.setAllocationSize(memRequirements.size);
     allocInfo.setMemoryTypeIndex(
-        findMemoryType(memRequirements.memoryTypeBits,
-                       vk::MemoryPropertyFlagBits::eHostCoherent |
-                           vk::MemoryPropertyFlagBits::eHostVisible));
+        findMemoryType(memRequirements.memoryTypeBits, memProperties));
 
-    vertexBufferMemory = device.allocateMemory(allocInfo);
+    vk::DeviceMemory bufferMemory = device.allocateMemory(allocInfo);
 
     // bind buffer to memory, with offset of 0, because it's not being shared
-    device.bindBufferMemory(vertexBuffer, vertexBufferMemory, 0);
+    device.bindBufferMemory(buffer, bufferMemory, 0);
 
-    void *data;
-    auto result =
-        device.mapMemory(vertexBufferMemory, 0, bufferInfo.size,
-                         static_cast<vk::MemoryMapFlagBits>(0), &data);
-    if (result != vk::Result::eSuccess) {
-      throw std::runtime_error("failed to map vertex buffer memory");
-    }
-    std::memcpy(data, vertices.data(), bufferInfo.size);
-    device.unmapMemory(vertexBufferMemory);
+    return {buffer, bufferMemory};
   }
 
-  uint32_t findMemoryType(uint32_t typeFilter,
-                          vk::MemoryPropertyFlags properties) const {
-    vk::PhysicalDeviceMemoryProperties memProperties =
+  void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer,
+                  vk::DeviceSize size) {
+    vk::CommandBufferAllocateInfo allocInfo;
+    allocInfo.setCommandPool(commandPool);
+    allocInfo.setCommandBufferCount(1);
+    allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
+
+    vk::CommandBuffer commandBuffer =
+        device.allocateCommandBuffers(allocInfo)[0];
+
+    vk::CommandBufferBeginInfo beginInfo;
+    beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+
+    commandBuffer.begin(beginInfo);
+
+    vk::BufferCopy copyRegion;
+    copyRegion.setSrcOffset(0);
+    copyRegion.setDstOffset(0);
+    copyRegion.size = size;
+
+    commandBuffer.copyBuffer(srcBuffer, dstBuffer, copyRegion);
+
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo;
+    submitInfo.setCommandBuffers(commandBuffer);
+
+    graphicsQueue.submit(submitInfo);
+    graphicsQueue.waitIdle();  // This is fine to do, not in the rendering loop
+
+    device.freeCommandBuffers(commandPool, commandBuffer);
+  }
+
+  [[nodiscard]] uint32_t findMemoryType(
+      const uint32_t typeFilter,
+      const vk::MemoryPropertyFlags properties) const {
+    const vk::PhysicalDeviceMemoryProperties memProperties =
         physicalDevice.getMemoryProperties();
 
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
