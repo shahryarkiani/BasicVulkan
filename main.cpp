@@ -101,10 +101,15 @@ class HelloTriangleApplication {
 
   vk::Buffer vertexBuffer;
   vk::DeviceMemory vertexBufferMemory;
+  vk::Buffer indexBuffer;
+  vk::DeviceMemory indexBufferMemory;
 
-  const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-                                        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                                        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+  const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                                        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                                        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+
+  const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
   uint32_t currentFrameIndex = 0;
   bool framebufferResized = false;
@@ -141,8 +146,39 @@ class HelloTriangleApplication {
     createFramebuffers();
     createCommandPool();
     createVertexBuffer();
+    createIndexBuffer();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createIndexBuffer() {
+    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    auto [stagingBuffer, stagingBufferMemory] =
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible |
+                         vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    void *data;
+    const auto result =
+        device.mapMemory(stagingBufferMemory, 0, bufferSize,
+                         static_cast<vk::MemoryMapFlagBits>(0), &data);
+    if (result != vk::Result::eSuccess) {
+      throw std::runtime_error("failed to map staging buffer memory");
+    }
+    std::memcpy(data, indices.data(), bufferSize);
+    device.unmapMemory(stagingBufferMemory);
+
+    std::tie(indexBuffer, indexBufferMemory) =
+        createBuffer(bufferSize,
+                     vk::BufferUsageFlagBits::eIndexBuffer |
+                         vk::BufferUsageFlagBits::eTransferDst,
+                     vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+    device.destroyBuffer(stagingBuffer);
+    device.freeMemory(stagingBufferMemory);
   }
 
   void createVertexBuffer() {
@@ -313,8 +349,10 @@ class HelloTriangleApplication {
     commandBuffer.setScissor(0, 1, &scissor);
 
     commandBuffer.bindVertexBuffers(0, vertexBuffer, {0});
+    commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint16);
 
-    commandBuffer.draw(3, 1, 0, 0);
+    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0,
+                              0, 0);
 
     commandBuffer.endRenderPass();
     commandBuffer.end();
@@ -640,6 +678,8 @@ class HelloTriangleApplication {
 
     cleanupSwapChain();
 
+    device.destroyBuffer(indexBuffer);
+    device.freeMemory(indexBufferMemory);
     device.destroyBuffer(vertexBuffer);
     device.freeMemory(vertexBufferMemory);
     device.destroyPipeline(graphicsPipeline);
