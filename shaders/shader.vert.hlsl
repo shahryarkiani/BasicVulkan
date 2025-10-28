@@ -1,8 +1,8 @@
 cbuffer UniformBufferObject : register(b0)
 {
-  column_major float4x4 model;
-  column_major float4x4 view;
-  column_major float4x4 proj;
+  float4x4 model;
+  float4x4 view;
+  float4x4 proj;
 };
 
 struct VSOutput {
@@ -18,7 +18,6 @@ struct VSInput {
 VSOutput main(VSInput input)
 {
     VSOutput output;
-    float4x4 transform = proj * view * model;
     output.position = mul(float4(input.inPosition, 0.0, 1.0), model);
     output.color = input.inColor;
     return output;
