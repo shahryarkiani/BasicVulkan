@@ -1,9 +1,11 @@
 ﻿#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -58,6 +60,12 @@ struct Vertex {
   }
 };
 
+struct UniformBufferObject {
+  alignas(16) glm::mat4 model;
+  alignas(16) glm::mat4 view;
+  alignas(16) glm::mat4 proj;
+};
+
 class HelloTriangleApplication {
  public:
   void run() {
@@ -82,6 +90,8 @@ class HelloTriangleApplication {
   std::vector<vk::Framebuffer> swapChainFramebuffers;
 
   vk::RenderPass renderPass;
+
+  vk::DescriptorSetLayout descriptorSetLayout;
   vk::PipelineLayout pipelineLayout;
 
   vk::CommandPool commandPool;
@@ -104,6 +114,15 @@ class HelloTriangleApplication {
   vk::Buffer indexBuffer;
   vk::DeviceMemory indexBufferMemory;
 
+  // This should be big enough to store MAX_FRAMES_IN_FLIGHTS count of
+  // uniform buffer objects
+  std::vector<vk::Buffer> uniformBuffers;
+  vk::DeviceMemory uniformBufferMemory;
+  UniformBufferObject *uniformBufferMapped = nullptr;
+
+  vk::DescriptorPool descriptorPool;
+  std::vector<vk::DescriptorSet> descriptorSets;
+
   const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
                                         {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
                                         {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
@@ -114,7 +133,7 @@ class HelloTriangleApplication {
   uint32_t currentFrameIndex = 0;
   bool framebufferResized = false;
 
-  static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+  static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
   void initWindow() {
     glfwInit();
@@ -142,17 +161,148 @@ class HelloTriangleApplication {
     createSwapChain();
     createImageViews();
     createRenderPass();
+    createDescriptorSetLayout();
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
     createVertexBuffer();
     createIndexBuffer();
+    createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSet();
     createCommandBuffers();
     createSyncObjects();
   }
 
+  void createDescriptorSet() {
+    vk::DescriptorSetAllocateInfo allocInfo;
+    std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+                                                 descriptorSetLayout);
+    allocInfo.setSetLayouts(layouts);
+    allocInfo.setDescriptorPool(descriptorPool);
+
+    descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      vk::DescriptorBufferInfo bufferInfo;
+      bufferInfo.buffer = uniformBuffers[i];
+      bufferInfo.offset = 0;
+      bufferInfo.range = sizeof(UniformBufferObject);
+
+      vk::WriteDescriptorSet descriptorWrite;
+      descriptorWrite.setDstSet(descriptorSets[i]);
+      descriptorWrite.setDstBinding(0);
+      descriptorWrite.setDescriptorType(
+          vk::DescriptorType::eUniformBuffer);
+      descriptorWrite.setDescriptorCount(1);
+      descriptorWrite.setDstArrayElement(0);
+      descriptorWrite.setBufferInfo(bufferInfo);
+
+      device.updateDescriptorSets(descriptorWrite, {});
+    }
+  }
+
+  void createDescriptorPool() {
+    vk::DescriptorPoolSize poolSize;
+    poolSize.setType(vk::DescriptorType::eUniformBuffer);
+    poolSize.setDescriptorCount(MAX_FRAMES_IN_FLIGHT);
+
+    vk::DescriptorPoolCreateInfo poolInfo;
+    poolInfo.setPoolSizes(poolSize);
+    poolInfo.setMaxSets(MAX_FRAMES_IN_FLIGHT);
+
+    descriptorPool = device.createDescriptorPool(poolInfo);
+  }
+
+  void createDescriptorSetLayout() {
+    vk::DescriptorSetLayoutBinding uboLayoutBinding;
+    uboLayoutBinding.setBinding(0);
+    uboLayoutBinding.setDescriptorType(vk::DescriptorType::eUniformBuffer);
+    uboLayoutBinding.setDescriptorCount(1);
+    uboLayoutBinding.setStageFlags(vk::ShaderStageFlagBits::eVertex);
+
+    vk::DescriptorSetLayoutCreateInfo layoutInfo;
+    layoutInfo.setBindings(uboLayoutBinding);
+
+    descriptorSetLayout = device.createDescriptorSetLayout(layoutInfo);
+  }
+
+  void updateUniformBuffer(const uint32_t frameIdx) {
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    const auto currentTime = std::chrono::high_resolution_clock::now();
+    const float timeDiff =
+        std::chrono::duration<float, std::chrono::seconds::period>(currentTime -
+                                                                   startTime)
+            .count();
+
+    UniformBufferObject ubo{};
+
+    // Rotate identity matrix about the Z axis based on time
+    ubo.model = glm::rotate(glm::mat4(1.0f), timeDiff * glm::radians(90.0f),
+                            glm::vec3(0.0f, 0.0f, 1.0f));
+
+    ubo.view =
+        glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                    glm::vec3(0.0f, 0.0f, 1.0f));
+
+    ubo.proj = glm::perspective(
+        glm::radians(45.0f),
+        swapChainExtent.width / static_cast<float>(swapChainExtent.height),
+        0.1f, 10.0f);
+    ubo.proj[1][1] *= -1;
+
+    std::memcpy(&uniformBufferMapped[frameIdx], &ubo, sizeof(ubo));
+  }
+
+  void createUniformBuffers() {
+    constexpr vk::DeviceSize bufferListSize =
+        sizeof(UniformBufferObject) * MAX_FRAMES_IN_FLIGHT;
+    uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+    vk::BufferCreateInfo bufferListInfo;
+    bufferListInfo.setSize(bufferListSize);
+    bufferListInfo.setUsage(vk::BufferUsageFlagBits::eUniformBuffer);
+    bufferListInfo.setSharingMode(vk::SharingMode::eExclusive);
+
+    vk::Buffer tempBuffer = device.createBuffer(bufferListInfo);
+
+    const vk::MemoryRequirements memRequirements =
+        device.getBufferMemoryRequirements(tempBuffer);
+
+    device.destroyBuffer(tempBuffer);
+
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.setAllocationSize(memRequirements.size);
+    allocInfo.setMemoryTypeIndex(
+        findMemoryType(memRequirements.memoryTypeBits,
+                       vk::MemoryPropertyFlagBits::eHostVisible |
+                           vk::MemoryPropertyFlagBits::eHostCoherent));
+
+    uniformBufferMemory = device.allocateMemory(allocInfo);
+
+    const auto result =
+        device.mapMemory(uniformBufferMemory, 0, bufferListSize,
+                         static_cast<vk::MemoryMapFlagBits>(0),
+                         reinterpret_cast<void **>(&uniformBufferMapped));
+    if (result != vk::Result::eSuccess) {
+      throw std::runtime_error("failed to map uniform buffer memory");
+    }
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      vk::BufferCreateInfo bufferInfo;
+      vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+      bufferInfo.setSize(bufferSize);
+      bufferInfo.setUsage(vk::BufferUsageFlagBits::eUniformBuffer);
+      bufferInfo.setSharingMode(vk::SharingMode::eExclusive);
+      uniformBuffers[i] = device.createBuffer(bufferInfo);
+      device.bindBufferMemory(uniformBuffers[i], uniformBufferMemory,
+                              i * sizeof(UniformBufferObject));
+    }
+  }
+
   void createIndexBuffer() {
-    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+    const vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
     auto [stagingBuffer, stagingBufferMemory] =
         createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
@@ -238,7 +388,7 @@ class HelloTriangleApplication {
   }
 
   void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer,
-                  vk::DeviceSize size) {
+                  vk::DeviceSize size) const {
     vk::CommandBufferAllocateInfo allocInfo;
     allocInfo.setCommandPool(commandPool);
     allocInfo.setCommandBufferCount(1);
@@ -350,9 +500,12 @@ class HelloTriangleApplication {
 
     commandBuffer.bindVertexBuffers(0, vertexBuffer, {0});
     commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint16);
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                     pipelineLayout, 0,
+                                     descriptorSets[currentFrameIndex], {});
 
-    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0,
-                              0, 0);
+    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0,
+                              0);
 
     commandBuffer.endRenderPass();
     commandBuffer.end();
@@ -475,9 +628,7 @@ class HelloTriangleApplication {
     colorBlending.setAttachments(colorBlendAttachment);
 
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
-    pipelineLayoutInfo.setSetLayouts({});
-    pipelineLayoutInfo.setPushConstantRanges({});
-
+    pipelineLayoutInfo.setSetLayouts(descriptorSetLayout);
     pipelineLayout = device.createPipelineLayout(pipelineLayoutInfo);
 
     vk::GraphicsPipelineCreateInfo pipelineInfo;
@@ -633,6 +784,8 @@ class HelloTriangleApplication {
     // We have a deadlock scenario
     device.resetFences(inFlightFences[currentFrameIndex]);
 
+    updateUniformBuffer(currentFrameIndex);
+
     commandBuffers[currentFrameIndex].reset();
     recordCommandBuffer(commandBuffers[currentFrameIndex], nextImageIndex);
 
@@ -678,6 +831,11 @@ class HelloTriangleApplication {
 
     cleanupSwapChain();
 
+    for (auto uniformBuffer : uniformBuffers)
+      device.destroyBuffer(uniformBuffer);
+    device.freeMemory(uniformBufferMemory);
+    device.destroyDescriptorPool(descriptorPool);
+    device.destroyDescriptorSetLayout(descriptorSetLayout);
     device.destroyBuffer(indexBuffer);
     device.freeMemory(indexBufferMemory);
     device.destroyBuffer(vertexBuffer);

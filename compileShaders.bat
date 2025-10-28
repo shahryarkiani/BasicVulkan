@@ -1,2 +1,2 @@
-dxc Shaders/shader.frag.hlsl -T ps_6_0 -spirv -Fo Shaders/frag.spv
-dxc Shaders/shader.vert.hlsl -T vs_6_0 -spirv -Fo Shaders/vert.spv
+"C:\VulkanSDK\1.4.328.1\Bin\dxc.exe" Shaders/shader.frag.hlsl -T ps_6_0 -spirv -Zpc -Fo Shaders/frag.spv
+"C:\VulkanSDK\1.4.328.1\Bin\dxc.exe" Shaders/shader.vert.hlsl -T vs_6_0 -spirv -Zpc -Fo Shaders/vert.spv
