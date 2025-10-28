@@ -18,7 +18,8 @@ struct VSInput {
 VSOutput main(VSInput input)
 {
     VSOutput output;
-    output.position = mul(float4(input.inPosition, 0.0, 1.0), model);
+    float4x4 transform = mul(mul(proj, view), model);
+    output.position = mul(transform, float4(input.inPosition, 0.0, 1.0));
     output.color = input.inColor;
     return output;
 }
