@@ -14,10 +14,16 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory("extern/glfw")
 
+if(WIN32)
+    set(COMPILE_SHADERS_CMD ${CMAKE_SOURCE_DIR}/compileShaders.bat)
+else()
+    set(COMPILE_SHADERS_CMD bash ${CMAKE_SOURCE_DIR}/compileShaders.sh)
+endif()
+
 # Compile and move shaders to output directory as well
 add_custom_target(copy_shaders ALL
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMAND ./compileShaders.bat
+        COMMAND ${COMPILE_SHADERS_CMD}
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/shaders
         ${CMAKE_BINARY_DIR}/shaders
@@ -25,6 +31,7 @@ add_custom_target(copy_shaders ALL
 )
 
 add_executable(VulkTutorial "main.cpp")
+include_directories(VulkTutorial PRIVATE ${CMAKE_SOURCE_DIR}/include)
 add_dependencies(VulkTutorial copy_shaders)
 
 target_link_libraries(VulkTutorial PRIVATE Vulkan::Vulkan)
