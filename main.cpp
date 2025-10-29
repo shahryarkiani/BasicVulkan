@@ -14,6 +14,9 @@
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
 
@@ -114,6 +117,9 @@ class HelloTriangleApplication {
   vk::Buffer indexBuffer;
   vk::DeviceMemory indexBufferMemory;
 
+  vk::Image textureImage;
+  vk::DeviceMemory textureImageMemory;
+
   // This should be big enough to store MAX_FRAMES_IN_FLIGHTS count of
   // uniform buffer objects
   std::vector<vk::Buffer> uniformBuffers;
@@ -165,6 +171,7 @@ class HelloTriangleApplication {
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
+    createTextureImage();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -172,6 +179,72 @@ class HelloTriangleApplication {
     createDescriptorSet();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createTextureImage() {
+    int texWidth, texHeight, texChannels;
+    stbi_uc *pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight,
+                                &texChannels, STBI_rgb_alpha);
+    if (!pixels) {
+      throw std::runtime_error("failed to load texture image!");
+    }
+
+    const vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+    auto [stagingBuffer, stagingBufferMemory] =
+        createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible |
+                         vk::MemoryPropertyFlagBits::eHostCoherent);
+    void *data;
+    const auto result =
+        device.mapMemory(stagingBufferMemory, 0, imageSize,
+                         static_cast<vk::MemoryMapFlagBits>(0), &data);
+    if (result != vk::Result::eSuccess) {
+      throw std::runtime_error("Failed to map memory for image staging buffer");
+    }
+    std::memcpy(data, pixels, imageSize);
+    device.unmapMemory(stagingBufferMemory);
+    stbi_image_free(pixels);
+
+    std::tie(textureImage, textureImageMemory) = createImage(
+        texWidth, texHeight, vk::Format::eR8G8B8A8Srgb,
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eSampled,
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
+  }
+
+  std::pair<vk::Image, vk::DeviceMemory> createImage(
+      uint32_t width, uint32_t height, vk::Format format,
+      vk::ImageTiling tiling, vk::ImageUsageFlags usage,
+      vk::MemoryPropertyFlags properties) {
+    vk::ImageCreateInfo imageInfo;
+    imageInfo.setImageType(vk::ImageType::e2D);
+    imageInfo.setExtent({static_cast<uint32_t>(width),
+                         static_cast<uint32_t>(height), /*depth =*/1});
+    imageInfo.setMipLevels(1);
+    imageInfo.setArrayLayers(1);
+    imageInfo.setFormat(format);
+    imageInfo.setTiling(tiling);
+    imageInfo.setInitialLayout(vk::ImageLayout::eUndefined);
+    imageInfo.setUsage(usage);
+    imageInfo.setSharingMode(vk::SharingMode::eExclusive);
+    imageInfo.setSamples(vk::SampleCountFlagBits::e1);
+
+    const vk::Image image = device.createImage(imageInfo);
+
+    const vk::MemoryRequirements memRequirements =
+        device.getImageMemoryRequirements(image);
+
+    vk::MemoryAllocateInfo allocInfo;
+    allocInfo.setAllocationSize(memRequirements.size);
+    allocInfo.setMemoryTypeIndex(
+        findMemoryType(memRequirements.memoryTypeBits, properties));
+
+    const vk::DeviceMemory imageMemory = device.allocateMemory(allocInfo);
+
+    device.bindImageMemory(image, imageMemory, 0);
+
+    return {image, imageMemory};
   }
 
   void createDescriptorSet() {
@@ -192,8 +265,7 @@ class HelloTriangleApplication {
       vk::WriteDescriptorSet descriptorWrite;
       descriptorWrite.setDstSet(descriptorSets[i]);
       descriptorWrite.setDstBinding(0);
-      descriptorWrite.setDescriptorType(
-          vk::DescriptorType::eUniformBuffer);
+      descriptorWrite.setDescriptorType(vk::DescriptorType::eUniformBuffer);
       descriptorWrite.setDescriptorCount(1);
       descriptorWrite.setDstArrayElement(0);
       descriptorWrite.setBufferInfo(bufferInfo);
@@ -387,8 +459,7 @@ class HelloTriangleApplication {
     return {buffer, bufferMemory};
   }
 
-  void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer,
-                  vk::DeviceSize size) const {
+  vk::CommandBuffer beginSingleTimeCommands() const {
     vk::CommandBufferAllocateInfo allocInfo;
     allocInfo.setCommandPool(commandPool);
     allocInfo.setCommandBufferCount(1);
@@ -402,13 +473,10 @@ class HelloTriangleApplication {
 
     commandBuffer.begin(beginInfo);
 
-    vk::BufferCopy copyRegion;
-    copyRegion.setSrcOffset(0);
-    copyRegion.setDstOffset(0);
-    copyRegion.size = size;
+    return commandBuffer;
+  }
 
-    commandBuffer.copyBuffer(srcBuffer, dstBuffer, copyRegion);
-
+  void endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
     commandBuffer.end();
 
     vk::SubmitInfo submitInfo;
@@ -418,6 +486,21 @@ class HelloTriangleApplication {
     graphicsQueue.waitIdle();  // This is fine to do, not in the rendering loop
 
     device.freeCommandBuffers(commandPool, commandBuffer);
+  }
+
+  void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer,
+                  vk::DeviceSize size) const {
+
+    auto commandBuffer = beginSingleTimeCommands();
+
+    vk::BufferCopy copyRegion;
+    copyRegion.setSrcOffset(0);
+    copyRegion.setDstOffset(0);
+    copyRegion.size = size;
+
+    commandBuffer.copyBuffer(srcBuffer, dstBuffer, copyRegion);
+
+    endSingleTimeCommands(commandBuffer);
   }
 
   [[nodiscard]] uint32_t findMemoryType(
@@ -611,7 +694,8 @@ class HelloTriangleApplication {
 
     vk::PipelineRasterizationStateCreateInfo rasterizer(
         {}, vk::False, vk::False, vk::PolygonMode::eFill,
-        vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise, vk::False);
+        vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
+        vk::False);
     rasterizer.setLineWidth(1.0f);
 
     // Default Initialize, we're not using multisampling

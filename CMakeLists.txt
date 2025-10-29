@@ -27,7 +27,10 @@ add_custom_target(copy_shaders ALL
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/shaders
         ${CMAKE_BINARY_DIR}/shaders
-        COMMENT "Compiling and copying shaders to output directory"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/textures
+        ${CMAKE_BINARY_DIR}/textures
+        COMMENT "Compiling and copying shaders + textures to output directory"
 )
 
 add_executable(VulkTutorial "main.cpp")
