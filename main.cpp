@@ -209,8 +209,16 @@ class HelloTriangleApplication {
     std::tie(textureImage, textureImageMemory) = createImage(
         texWidth, texHeight, vk::Format::eR8G8B8A8Srgb,
         vk::ImageTiling::eOptimal,
-        vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eSampled,
+        vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
         vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal);
+    copyBufferToImage(stagingBuffer, textureImage, texWidth, texHeight);
+
+    device.destroyBuffer(stagingBuffer);
+    device.freeMemory(stagingBufferMemory);
   }
 
   std::pair<vk::Image, vk::DeviceMemory> createImage(
@@ -245,6 +253,77 @@ class HelloTriangleApplication {
     device.bindImageMemory(image, imageMemory, 0);
 
     return {image, imageMemory};
+  }
+
+  void transitionImageLayout(vk::Image image, vk::Format format,
+                             vk::ImageLayout oldLayout,
+                             vk::ImageLayout newLayout) {
+    const auto commandBuffer = beginSingleTimeCommands();
+
+    vk::ImageMemoryBarrier barrier;
+    barrier.setOldLayout(oldLayout);
+    barrier.setNewLayout(newLayout);
+    barrier.setSrcQueueFamilyIndex(vk::QueueFamilyIgnored);
+    barrier.setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
+    barrier.setImage(image);
+    vk::ImageSubresourceRange range;
+    range.setAspectMask(vk::ImageAspectFlagBits::eColor);
+    range.setBaseMipLevel(0);
+    range.setLevelCount(1);
+    range.setBaseArrayLayer(0);
+    range.setLayerCount(1);
+    barrier.setSubresourceRange(range);
+
+    vk::PipelineStageFlags srcStage;
+    vk::PipelineStageFlags dstStage;
+
+    if (oldLayout == vk::ImageLayout::eUndefined &&
+        newLayout == vk::ImageLayout::eTransferDstOptimal) {
+      barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+      barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
+
+      srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+      dstStage = vk::PipelineStageFlagBits::eTransfer;
+    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+               newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+      barrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
+      barrier.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
+
+      srcStage = vk::PipelineStageFlagBits::eTransfer;
+      dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+    } else {
+      throw std::runtime_error("Unsupported image layout transition");
+    }
+
+    commandBuffer.pipelineBarrier(srcStage, dstStage, vk::DependencyFlags(0),
+                                  {}, {}, barrier);
+
+    endSingleTimeCommands(commandBuffer);
+  }
+
+  void copyBufferToImage(const vk::Buffer buffer, const vk::Image image,
+                         const uint32_t width, const uint32_t height) const {
+    const auto commandBuffer = beginSingleTimeCommands();
+
+    vk::BufferImageCopy region;
+    region.setBufferOffset(0);
+    region.setBufferRowLength(0);
+    region.setBufferImageHeight(0);
+
+    vk::ImageSubresourceLayers imageSubresourceLayers;
+    imageSubresourceLayers.setAspectMask(vk::ImageAspectFlagBits::eColor);
+    imageSubresourceLayers.setMipLevel(0);
+    imageSubresourceLayers.setBaseArrayLayer(0);
+    imageSubresourceLayers.setLayerCount(1);
+
+    region.setImageSubresource(imageSubresourceLayers);
+    region.setImageOffset(vk::Offset3D(0, 0, 0));
+    region.setImageExtent(vk::Extent3D(width, height, 1));
+
+    commandBuffer.copyBufferToImage(
+        buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+
+    endSingleTimeCommands(commandBuffer);
   }
 
   void createDescriptorSet() {
@@ -490,7 +569,6 @@ class HelloTriangleApplication {
 
   void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer,
                   vk::DeviceSize size) const {
-
     auto commandBuffer = beginSingleTimeCommands();
 
     vk::BufferCopy copyRegion;
@@ -917,6 +995,8 @@ class HelloTriangleApplication {
 
     for (auto uniformBuffer : uniformBuffers)
       device.destroyBuffer(uniformBuffer);
+    device.destroyImage(textureImage);
+    device.freeMemory(textureImageMemory);
     device.freeMemory(uniformBufferMemory);
     device.destroyDescriptorPool(descriptorPool);
     device.destroyDescriptorSetLayout(descriptorSetLayout);
