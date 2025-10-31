@@ -117,6 +117,8 @@ class HelloTriangleApplication {
   vk::Buffer indexBuffer;
   vk::DeviceMemory indexBufferMemory;
 
+  vk::Sampler textureSampler;
+  vk::ImageView textureImageView;
   vk::Image textureImage;
   vk::DeviceMemory textureImageMemory;
 
@@ -172,6 +174,8 @@ class HelloTriangleApplication {
     createFramebuffers();
     createCommandPool();
     createTextureImage();
+    createTextureImageView();
+    createTextureSampler();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -179,6 +183,48 @@ class HelloTriangleApplication {
     createDescriptorSet();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createTextureSampler() {
+    vk::SamplerCreateInfo samplerInfo;
+    samplerInfo.setMagFilter(vk::Filter::eLinear);
+    samplerInfo.setMinFilter(vk::Filter::eLinear);
+    samplerInfo.setAddressModeU(vk::SamplerAddressMode::eRepeat);
+    samplerInfo.setAddressModeV(vk::SamplerAddressMode::eRepeat);
+    samplerInfo.setAddressModeW(vk::SamplerAddressMode::eRepeat);
+    samplerInfo.setAnisotropyEnable(vk::True);
+    samplerInfo.setMaxAnisotropy(
+        physicalDevice.getProperties().limits.maxSamplerAnisotropy);
+    samplerInfo.setBorderColor(vk::BorderColor::eIntOpaqueBlack);
+    samplerInfo.setUnnormalizedCoordinates(vk::False);
+    samplerInfo.setCompareEnable(vk::False);
+    samplerInfo.setCompareOp(vk::CompareOp::eAlways);
+    samplerInfo.setMipmapMode(vk::SamplerMipmapMode::eLinear);
+    samplerInfo.setMinLod(0.0);
+    samplerInfo.setMaxLod(0.0);
+    samplerInfo.setMipLodBias(0.0);
+
+    textureSampler = device.createSampler(samplerInfo);
+  }
+
+  void createTextureImageView() {
+    textureImageView = createImageView(textureImage, vk::Format::eR8G8B8A8Srgb);
+  }
+
+  vk::ImageView createImageView(vk::Image image, vk::Format format) const {
+    vk::ImageViewCreateInfo viewInfo;
+    viewInfo.setImage(image);
+    viewInfo.setFormat(format);
+    viewInfo.setViewType(vk::ImageViewType::e2D);
+    vk::ImageSubresourceRange range;
+    range.setAspectMask(vk::ImageAspectFlagBits::eColor);
+    range.setBaseMipLevel(0);
+    range.setLevelCount(1);
+    range.setBaseArrayLayer(0);
+    range.setLayerCount(1);
+    viewInfo.setSubresourceRange(range);
+
+    return device.createImageView(viewInfo);
   }
 
   void createTextureImage() {
@@ -831,13 +877,8 @@ class HelloTriangleApplication {
     swapChainImageViews.resize(swapChainImages.size());
 
     for (size_t i = 0; i < swapChainImages.size(); i++) {
-      vk::ImageViewCreateInfo imageViewCreateInfo(
-          {}, swapChainImages[i], vk::ImageViewType::e2D, swapChainImageFormat,
-          vk::ComponentMapping(),
-          vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0,
-                                    1));
-
-      swapChainImageViews[i] = device.createImageView(imageViewCreateInfo);
+      swapChainImageViews[i] =
+          createImageView(swapChainImages[i], swapChainImageFormat);
     }
   }
 
@@ -993,8 +1034,10 @@ class HelloTriangleApplication {
 
     cleanupSwapChain();
 
-    for (auto uniformBuffer : uniformBuffers)
+    for (const auto uniformBuffer : uniformBuffers)
       device.destroyBuffer(uniformBuffer);
+    device.destroySampler(textureSampler);
+    device.destroyImageView(textureImageView);
     device.destroyImage(textureImage);
     device.freeMemory(textureImageMemory);
     device.freeMemory(uniformBufferMemory);
@@ -1116,7 +1159,9 @@ class HelloTriangleApplication {
       queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    vk::PhysicalDeviceFeatures deviceFeatures{};
+    vk::PhysicalDeviceFeatures deviceFeatures;
+    deviceFeatures.setSamplerAnisotropy(vk::True);
+
 
     vk::DeviceCreateInfo createInfo;
     createInfo.setQueueCreateInfos(queueCreateInfos);
@@ -1139,8 +1184,10 @@ class HelloTriangleApplication {
 
     const auto swapChainSupport = querySwapChainSupport(physDevice);
 
+    vk::PhysicalDeviceFeatures supportedFeatures = physDevice.getFeatures();
+
     return indices.isComplete() && swapChainSupport.isSuitable() &&
-           extensionsSupported;
+           extensionsSupported && supportedFeatures.samplerAnisotropy;
   }
 
   static bool checkDeviceExtensionSupport(
@@ -1258,7 +1305,7 @@ class HelloTriangleApplication {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
-      throw std::runtime_error("failed to open file!");
+      throw std::runtime_error("failed to open file! " + filename);
     }
 
     const auto fileSize = file.tellg();
