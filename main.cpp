@@ -269,7 +269,9 @@ class HelloTriangleApplication {
                           vk::ImageLayout::eUndefined,
                           vk::ImageLayout::eTransferDstOptimal);
     copyBufferToImage(stagingBuffer, textureImage, texWidth, texHeight);
-
+    transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb,
+                      vk::ImageLayout::eTransferDstOptimal,
+                      vk::ImageLayout::eShaderReadOnlyOptimal);
     device.destroyBuffer(stagingBuffer);
     device.freeMemory(stagingBufferMemory);
   }
