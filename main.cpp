@@ -35,6 +35,7 @@ constexpr bool enableValidationLayers = true;
 struct Vertex {
   glm::vec2 pos;
   glm::vec3 color;
+  glm::vec2 texCoord;
 
   static vk::VertexInputBindingDescription getBindingDescription() {
     vk::VertexInputBindingDescription bindingDescription;
@@ -45,7 +46,7 @@ struct Vertex {
     return bindingDescription;
   }
 
-  static std::array<vk::VertexInputAttributeDescription, 2>
+  static std::array<vk::VertexInputAttributeDescription, 3>
   getAttributeDescriptions() {
     vk::VertexInputAttributeDescription posDescription;
     posDescription.setBinding(0);
@@ -59,7 +60,13 @@ struct Vertex {
     colorDescription.setFormat(vk::Format::eR32G32B32Sfloat);
     colorDescription.setOffset(offsetof(Vertex, color));
 
-    return {posDescription, colorDescription};
+    vk::VertexInputAttributeDescription texCoordDescription;
+    texCoordDescription.binding = 0;
+    texCoordDescription.location = 2;
+    texCoordDescription.format = vk::Format::eR32G32Sfloat;
+    texCoordDescription.offset = offsetof(Vertex, texCoord);
+
+    return {posDescription, colorDescription, texCoordDescription};
   }
 };
 
@@ -131,11 +138,11 @@ class HelloTriangleApplication {
   vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
-  const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-                                        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-                                        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
-
+  const std::vector<Vertex> vertices = {
+      {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+      {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+      {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+      {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
   const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
   uint32_t currentFrameIndex = 0;
@@ -382,36 +389,63 @@ class HelloTriangleApplication {
     descriptorSets = device.allocateDescriptorSets(allocInfo);
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-      vk::DescriptorBufferInfo bufferInfo;
-      bufferInfo.buffer = uniformBuffers[i];
-      bufferInfo.offset = 0;
-      bufferInfo.range = sizeof(UniformBufferObject);
+      vk::DescriptorBufferInfo uboBufferInfo;
+      uboBufferInfo.buffer = uniformBuffers[i];
+      uboBufferInfo.offset = 0;
+      uboBufferInfo.range = sizeof(UniformBufferObject);
 
-      vk::WriteDescriptorSet descriptorWrite;
-      descriptorWrite.setDstSet(descriptorSets[i]);
-      descriptorWrite.setDstBinding(0);
-      descriptorWrite.setDescriptorType(vk::DescriptorType::eUniformBuffer);
-      descriptorWrite.setDescriptorCount(1);
-      descriptorWrite.setDstArrayElement(0);
-      descriptorWrite.setBufferInfo(bufferInfo);
+      vk::WriteDescriptorSet uboDescriptorWrite;
+      uboDescriptorWrite.setDstSet(descriptorSets[i]);
+      uboDescriptorWrite.setDstBinding(0);
+      uboDescriptorWrite.setDescriptorType(vk::DescriptorType::eUniformBuffer);
+      uboDescriptorWrite.setDescriptorCount(1);
+      uboDescriptorWrite.setDstArrayElement(0);
+      uboDescriptorWrite.setBufferInfo(uboBufferInfo);
 
-      device.updateDescriptorSets(descriptorWrite, {});
+      vk::DescriptorImageInfo imageInfo;
+      imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+      imageInfo.setImageView(textureImageView);
+      imageInfo.setSampler(textureSampler);
+
+      vk::WriteDescriptorSet samplerDescriptorWrite;
+      samplerDescriptorWrite.setDstSet(descriptorSets[i]);
+      samplerDescriptorWrite.setDstBinding(1);
+      samplerDescriptorWrite.setDescriptorType(
+          vk::DescriptorType::eCombinedImageSampler);
+      samplerDescriptorWrite.setDescriptorCount(1);
+      samplerDescriptorWrite.setDstArrayElement(0);
+      samplerDescriptorWrite.setImageInfo(imageInfo);
+
+      device.updateDescriptorSets({uboDescriptorWrite, samplerDescriptorWrite},
+                                  {});
     }
   }
 
   void createDescriptorPool() {
-    vk::DescriptorPoolSize poolSize;
-    poolSize.setType(vk::DescriptorType::eUniformBuffer);
-    poolSize.setDescriptorCount(MAX_FRAMES_IN_FLIGHT);
+    vk::DescriptorPoolSize uboPoolSize;
+    uboPoolSize.setType(vk::DescriptorType::eUniformBuffer);
+    uboPoolSize.setDescriptorCount(MAX_FRAMES_IN_FLIGHT);
+
+    vk::DescriptorPoolSize samplerPoolSize;
+    samplerPoolSize.setType(vk::DescriptorType::eCombinedImageSampler);
+    samplerPoolSize.setDescriptorCount(MAX_FRAMES_IN_FLIGHT);
 
     vk::DescriptorPoolCreateInfo poolInfo;
-    poolInfo.setPoolSizes(poolSize);
+    std::vector<vk::DescriptorPoolSize> poolSizes{uboPoolSize, samplerPoolSize};
+    poolInfo.setPoolSizes(poolSizes);
     poolInfo.setMaxSets(MAX_FRAMES_IN_FLIGHT);
 
     descriptorPool = device.createDescriptorPool(poolInfo);
   }
 
   void createDescriptorSetLayout() {
+    vk::DescriptorSetLayoutBinding samplerLayoutBinding;
+    samplerLayoutBinding.setBinding(1);
+    samplerLayoutBinding.setDescriptorCount(1);
+    samplerLayoutBinding.setDescriptorType(
+        vk::DescriptorType::eCombinedImageSampler);
+    samplerLayoutBinding.setStageFlags(vk::ShaderStageFlagBits::eFragment);
+
     vk::DescriptorSetLayoutBinding uboLayoutBinding;
     uboLayoutBinding.setBinding(0);
     uboLayoutBinding.setDescriptorType(vk::DescriptorType::eUniformBuffer);
@@ -419,7 +453,9 @@ class HelloTriangleApplication {
     uboLayoutBinding.setStageFlags(vk::ShaderStageFlagBits::eVertex);
 
     vk::DescriptorSetLayoutCreateInfo layoutInfo;
-    layoutInfo.setBindings(uboLayoutBinding);
+    std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding,
+                                                         samplerLayoutBinding};
+    layoutInfo.setBindings(bindings);
 
     descriptorSetLayout = device.createDescriptorSetLayout(layoutInfo);
   }
@@ -1161,7 +1197,6 @@ class HelloTriangleApplication {
 
     vk::PhysicalDeviceFeatures deviceFeatures;
     deviceFeatures.setSamplerAnisotropy(vk::True);
-
 
     vk::DeviceCreateInfo createInfo;
     createInfo.setQueueCreateInfos(queueCreateInfos);
