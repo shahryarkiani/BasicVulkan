@@ -1068,6 +1068,7 @@ class HelloTriangleApplication {
     cleanupSwapChain();
     createSwapChain();
     createImageViews();
+    createDepthResources();
     createFramebuffers();
   }
 
@@ -1076,7 +1077,9 @@ class HelloTriangleApplication {
       device.destroy(framebuffer);
 
     for (const auto imageView : swapChainImageViews) device.destroy(imageView);
-
+    device.destroyImageView(depthImageView);
+    device.destroyImage(depthImage);
+    device.freeMemory(depthImageMemory);
     device.destroySwapchainKHR(swapChain);
   }
 
@@ -1172,9 +1175,6 @@ class HelloTriangleApplication {
 
     for (const auto uniformBuffer : uniformBuffers)
       device.destroyBuffer(uniformBuffer);
-    device.destroyImageView(depthImageView);
-    device.destroyImage(depthImage);
-    device.freeMemory(depthImageMemory);
     device.destroySampler(textureSampler);
     device.destroyImageView(textureImageView);
     device.destroyImage(textureImage);
