@@ -27,7 +27,11 @@ const std::vector<const char *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
 
 const std::vector<const char *> deviceExtensions = {
-    vk::KHRSwapchainExtensionName};
+    vk::KHRSwapchainExtensionName,
+    vk::EXTMeshShaderExtensionName,
+    vk::KHRSpirv14ExtensionName,
+    vk::KHRShaderFloatControlsExtensionName,
+};
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -1299,7 +1303,7 @@ class HelloTriangleApplication {
 
     constexpr vk::ApplicationInfo appInfo(
         "Hello Triangle", VK_MAKE_VERSION(1, 0, 0), "No Engine",
-        VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_0);
+        VK_MAKE_VERSION(1, 0, 0), vk::ApiVersion13);
 
     auto extensions = getRequiredExtensions();
     vk::InstanceCreateInfo createInfo;
