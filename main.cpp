@@ -625,7 +625,7 @@ class HelloTriangleApplication {
     ubo.proj = glm::perspective(
         glm::radians(camera.vfov),
         swapChainExtent.width / static_cast<float>(swapChainExtent.height),
-        0.1f, 10.0f);
+        0.1f, 100.0f);
     ubo.proj[1][1] *= -1;
 
     std::memcpy(&uniformBufferMapped[frameIdx], &ubo, sizeof(ubo));
