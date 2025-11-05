@@ -35,6 +35,43 @@ const bool enableValidationLayers = false;
 constexpr bool enableValidationLayers = true;
 #endif
 
+struct Camera {
+  glm::vec3 position;
+  float pitch;
+  float yaw;
+  float vfov;
+
+  Camera() : position({0, 0, 0}), pitch(0), yaw(0), vfov(0) {}
+
+  Camera(glm::vec3 initPosition, float pitch, float yaw, float vfov)
+      : position(initPosition), pitch(pitch), yaw(yaw), vfov(vfov) {}
+
+  [[nodiscard]] glm::vec3 getForwardVector() const {
+    glm::vec3 direction;
+    direction.x = cos(pitch) * cos(yaw);
+    direction.y = sin(pitch);
+    direction.z = cos(pitch) * sin(yaw);
+    return glm::normalize(direction);
+  }
+  [[nodiscard]] glm::mat4 getViewTransform() const {
+    // Compute target and view matrix
+    return glm::lookAt(position, position + getForwardVector(), {0, 1, 0});
+  }
+  void processMovement(float forward, float horizontal, float yaw_change,
+                       float pitch_change) {
+    glm::vec3 direction = glm::normalize(getForwardVector());
+    glm::vec3 right = glm::normalize(glm::cross(direction, {0, 1, 0}));
+
+    position += direction * forward;
+    position += right * horizontal;
+
+    pitch += pitch_change;
+    pitch = std::clamp(pitch, -1.55f, 1.55f);
+
+    yaw += yaw_change;
+  }
+};
+
 struct Vertex {
   glm::vec3 pos;
   glm::vec3 color;
@@ -145,6 +182,12 @@ class HelloTriangleApplication {
   vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
+  Camera camera = Camera{{2.0f, 2.0f, 2.0f}, glm::radians(-30.f), glm::radians(-110.0f), 45};
+  std::chrono::steady_clock::time_point prevTime;
+  float sensitivity = 0.001;
+  double lastX = 0.0, lastY = 0.0;
+  bool firstMouse = true;
+
   const std::vector<Vertex> vertices = {
       {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
       {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
@@ -172,6 +215,7 @@ class HelloTriangleApplication {
     window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan C++", nullptr, nullptr);
     glfwSetWindowUserPointer(window, this);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
   }
 
   static void framebufferResizeCallback(GLFWwindow *window, int width,
@@ -523,9 +567,47 @@ class HelloTriangleApplication {
     descriptorSetLayout = device.createDescriptorSetLayout(layoutInfo);
   }
 
+  void updateCamera() {
+    const auto currentTime = std::chrono::high_resolution_clock::now();
+    const float deltaTime =
+    std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime -
+                                                               prevTime)
+        .count();
+
+
+    float forward = 0.0;
+    float horizontal = 0.0;
+    float pitchChange = 0.0;
+    float yawChange = 0.0;
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) forward += 1.0;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) forward -= 1.0;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) horizontal += 1.0;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) horizontal -= 1.0;
+
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+
+    if (firstMouse) {
+      lastX = xpos;
+      lastY = ypos;
+      firstMouse = false;
+    }
+
+    double xoffset = xpos - lastX;
+    double yoffset = lastY - ypos;
+
+    lastX = xpos;
+    lastY = ypos;
+
+    yawChange = static_cast<float>(xoffset) * sensitivity;
+    pitchChange = static_cast<float>(yoffset) * sensitivity;
+    camera.processMovement(forward * deltaTime * 100, horizontal * deltaTime * 100,
+                           yawChange, pitchChange);
+  }
+
   void updateUniformBuffer(const uint32_t frameIdx) {
     static auto startTime = std::chrono::high_resolution_clock::now();
-
     const auto currentTime = std::chrono::high_resolution_clock::now();
     const float timeDiff =
         std::chrono::duration<float, std::chrono::seconds::period>(currentTime -
@@ -538,12 +620,10 @@ class HelloTriangleApplication {
     ubo.model = glm::rotate(glm::mat4(1.0f), timeDiff * glm::radians(90.0f),
                             glm::vec3(0.0f, 0.0f, 1.0f));
 
-    ubo.view =
-        glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                    glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = camera.getViewTransform();
 
     ubo.proj = glm::perspective(
-        glm::radians(45.0f),
+        glm::radians(camera.vfov),
         swapChainExtent.width / static_cast<float>(swapChainExtent.height),
         0.1f, 10.0f);
     ubo.proj[1][1] *= -1;
@@ -784,7 +864,7 @@ class HelloTriangleApplication {
 
     vk::ClearValue clearColor{vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f)};
     vk::ClearValue depthStencil{vk::ClearDepthStencilValue(1.0f, 0)};
-    vk::ClearValue clearValues[] = {clearColor ,depthStencil};
+    vk::ClearValue clearValues[] = {clearColor, depthStencil};
     renderPassInfo.setClearValues(clearValues);
 
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
@@ -1093,8 +1173,11 @@ class HelloTriangleApplication {
   }
 
   void mainLoop() {
+    prevTime = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
+      prevTime = std::chrono::high_resolution_clock::now();
+      updateCamera();
       drawFrame();
     }
 
