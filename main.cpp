@@ -1479,12 +1479,17 @@ class HelloTriangleApplication {
       queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    vk::PhysicalDeviceFeatures deviceFeatures;
-    deviceFeatures.setSamplerAnisotropy(vk::True);
+    vk::PhysicalDeviceMeshShaderFeaturesEXT meshFeatures;
+    meshFeatures.setMeshShader(vk::True);
+    meshFeatures.setTaskShader(vk::True);
+
+    vk::PhysicalDeviceFeatures2 deviceFeatures;
+    deviceFeatures.features.setSamplerAnisotropy(vk::True);
+    deviceFeatures.setPNext(meshFeatures);
 
     vk::DeviceCreateInfo createInfo;
     createInfo.setQueueCreateInfos(queueCreateInfos);
-    createInfo.setPEnabledFeatures(&deviceFeatures);
+    createInfo.setPNext(&deviceFeatures);
 
     createInfo.enabledExtensionCount = deviceExtensions.size();
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
@@ -1503,10 +1508,16 @@ class HelloTriangleApplication {
 
     const auto swapChainSupport = querySwapChainSupport(physDevice);
 
-    vk::PhysicalDeviceFeatures supportedFeatures = physDevice.getFeatures();
+    vk::PhysicalDeviceFeatures2 supportedFeatures;
+    vk::PhysicalDeviceMeshShaderFeaturesEXT meshFeatures;
+    supportedFeatures.setPNext(&meshFeatures);
+
+    physDevice.getFeatures2(&supportedFeatures);
 
     return indices.isComplete() && swapChainSupport.isSuitable() &&
-           extensionsSupported && supportedFeatures.samplerAnisotropy;
+           extensionsSupported &&
+           supportedFeatures.features.samplerAnisotropy &&
+           meshFeatures.meshShader;
   }
 
   static bool checkDeviceExtensionSupport(
