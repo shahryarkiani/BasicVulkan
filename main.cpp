@@ -1045,7 +1045,7 @@ class HelloTriangleApplication {
 
     vk::PipelineRasterizationStateCreateInfo rasterizer(
         {}, vk::False, vk::False, vk::PolygonMode::eFill,
-        vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
+        vk::CullModeFlagBits::eNone, vk::FrontFace::eCounterClockwise,
         vk::False);
     rasterizer.setLineWidth(1.0f);
 
@@ -1132,7 +1132,7 @@ class HelloTriangleApplication {
 
     vk::PipelineRasterizationStateCreateInfo rasterizer(
         {}, vk::False, vk::False, vk::PolygonMode::eFill,
-        vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
+        vk::CullModeFlagBits::eNone, vk::FrontFace::eCounterClockwise,
         vk::False);
     rasterizer.setLineWidth(1.0f);
 

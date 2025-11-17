@@ -32,7 +32,7 @@ void main()
 {
   uint iid = gl_LocalInvocationID.x;
 
-  vec4 offset = vec4(0.0, 0.0, gl_GlobalInvocationID.x, 0.0);
+  vec4 offset = vec4(0.0, 0.0, gl_GlobalInvocationID.x + 1, 0.0);
 
   SetMeshOutputsEXT(3, 1);
   mat4 mvp = ubo.projection * ubo.view * ubo.model;
