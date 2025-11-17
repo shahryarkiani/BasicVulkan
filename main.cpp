@@ -61,13 +61,16 @@ struct Camera {
     // Compute target and view matrix
     return glm::lookAt(position, position + getForwardVector(), {0, 1, 0});
   }
-  void processMovement(float forward, float horizontal, float yaw_change,
+  void processMovement(float forward, float horizontal, float vertical, float yaw_change,
                        float pitch_change) {
     glm::vec3 direction = glm::normalize(getForwardVector());
     glm::vec3 right = glm::normalize(glm::cross(direction, {0, 1, 0}));
+    glm::vec3 up = {0, 1, 0};
 
     position += direction * forward;
     position += right * horizontal;
+    position += vertical * up;
+
 
     pitch += pitch_change;
     pitch = std::clamp(pitch, -1.55f, 1.55f);
@@ -147,6 +150,7 @@ class HelloTriangleApplication {
 
   vk::DescriptorSetLayout descriptorSetLayout;
   vk::PipelineLayout pipelineLayout;
+  vk::PipelineLayout meshPipelineLayout;
 
   vk::CommandPool commandPool;
   std::vector<vk::CommandBuffer> commandBuffers;
@@ -205,7 +209,7 @@ class HelloTriangleApplication {
       {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
       {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
-  const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
+  const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0, 4, 6, 5, 6, 4, 7};
 
   uint32_t currentFrameIndex = 0;
   bool framebufferResized = false;
@@ -585,6 +589,7 @@ class HelloTriangleApplication {
 
     float forward = 0.0;
     float horizontal = 0.0;
+    float vertical = 0.0;
     float pitchChange = 0.0;
     float yawChange = 0.0;
 
@@ -592,7 +597,9 @@ class HelloTriangleApplication {
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) forward -= 1.0;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) horizontal += 1.0;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) horizontal -= 1.0;
-
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) vertical += 1.0; 
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) vertical -= 1.0;
+        
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
 
@@ -611,7 +618,7 @@ class HelloTriangleApplication {
     yawChange = static_cast<float>(xoffset) * sensitivity;
     pitchChange = static_cast<float>(yoffset) * sensitivity;
     camera.processMovement(forward * deltaTime * 100,
-                           horizontal * deltaTime * 100, yawChange,
+                           horizontal * deltaTime * 100, vertical * deltaTime * 100, yawChange,
                            pitchChange);
   }
 
@@ -1064,7 +1071,7 @@ class HelloTriangleApplication {
 
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
     pipelineLayoutInfo.setSetLayouts(descriptorSetLayout);
-    pipelineLayout = device.createPipelineLayout(pipelineLayoutInfo);
+    meshPipelineLayout = device.createPipelineLayout(pipelineLayoutInfo);
 
     vk::GraphicsPipelineCreateInfo pipelineInfo;
     pipelineInfo.setStages(shaderStages);
@@ -1075,7 +1082,7 @@ class HelloTriangleApplication {
     pipelineInfo.setPDynamicState(&dynamicState);
     pipelineInfo.setPDepthStencilState(&depthStencil);
 
-    pipelineInfo.setLayout(pipelineLayout);
+    pipelineInfo.setLayout(meshPipelineLayout);
     pipelineInfo.setRenderPass(renderPass);
     pipelineInfo.setSubpass(0);
 
@@ -1370,7 +1377,9 @@ class HelloTriangleApplication {
     device.destroyBuffer(vertexBuffer);
     device.freeMemory(vertexBufferMemory);
     device.destroyPipeline(graphicsPipeline);
+    device.destroyPipeline(meshGraphicsPipeline);
     device.destroyPipelineLayout(pipelineLayout);
+    device.destroyPipelineLayout(meshPipelineLayout);
     device.destroyRenderPass(renderPass);
 
     device.destroy();
