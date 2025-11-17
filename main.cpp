@@ -564,7 +564,9 @@ class HelloTriangleApplication {
     uboLayoutBinding.setBinding(0);
     uboLayoutBinding.setDescriptorType(vk::DescriptorType::eUniformBuffer);
     uboLayoutBinding.setDescriptorCount(1);
-    uboLayoutBinding.setStageFlags(vk::ShaderStageFlagBits::eVertex);
+    uboLayoutBinding.setStageFlags(vk::ShaderStageFlagBits::eVertex |
+                                   vk::ShaderStageFlagBits::eMeshEXT |
+                                   vk::ShaderStageFlagBits::eTaskEXT);
 
     vk::DescriptorSetLayoutCreateInfo layoutInfo;
     std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding,
@@ -1483,9 +1485,13 @@ class HelloTriangleApplication {
     meshFeatures.setMeshShader(vk::True);
     meshFeatures.setTaskShader(vk::True);
 
+    vk::PhysicalDeviceMaintenance4Features main4features;
+    main4features.setMaintenance4(vk::True);
+    meshFeatures.setPNext(&main4features);
+
     vk::PhysicalDeviceFeatures2 deviceFeatures;
     deviceFeatures.features.setSamplerAnisotropy(vk::True);
-    deviceFeatures.setPNext(meshFeatures);
+    deviceFeatures.setPNext(&meshFeatures);
 
     vk::DeviceCreateInfo createInfo;
     createInfo.setQueueCreateInfos(queueCreateInfos);
@@ -1512,12 +1518,15 @@ class HelloTriangleApplication {
     vk::PhysicalDeviceMeshShaderFeaturesEXT meshFeatures;
     supportedFeatures.setPNext(&meshFeatures);
 
+    vk::PhysicalDeviceMaintenance4Features main4features;
+    meshFeatures.setPNext(&main4features);
+
     physDevice.getFeatures2(&supportedFeatures);
 
     return indices.isComplete() && swapChainSupport.isSuitable() &&
            extensionsSupported &&
            supportedFeatures.features.samplerAnisotropy &&
-           meshFeatures.meshShader;
+           meshFeatures.meshShader && main4features.maintenance4;
   }
 
   static bool checkDeviceExtensionSupport(
