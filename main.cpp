@@ -151,6 +151,7 @@ class HelloTriangleApplication {
   vk::CommandPool commandPool;
   std::vector<vk::CommandBuffer> commandBuffers;
   vk::Pipeline graphicsPipeline;
+  vk::Pipeline meshGraphicsPipeline;
 
   std::vector<vk::ImageView> swapChainImageViews;
 
@@ -186,7 +187,8 @@ class HelloTriangleApplication {
   vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
-  Camera camera = Camera{{2.0f, 2.0f, 2.0f}, glm::radians(-30.f), glm::radians(-110.0f), 45};
+  Camera camera = Camera{
+      {2.0f, 2.0f, 2.0f}, glm::radians(-30.f), glm::radians(-110.0f), 45};
   std::chrono::steady_clock::time_point prevTime;
   float sensitivity = 0.001;
   double lastX = 0.0, lastY = 0.0;
@@ -239,6 +241,7 @@ class HelloTriangleApplication {
     createRenderPass();
     createDescriptorSetLayout();
     createGraphicsPipeline();
+    createMeshGraphicsPipeline();
     createCommandPool();
     createDepthResources();
     createFramebuffers();
@@ -574,10 +577,9 @@ class HelloTriangleApplication {
   void updateCamera() {
     const auto currentTime = std::chrono::high_resolution_clock::now();
     const float deltaTime =
-    std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime -
-                                                               prevTime)
-        .count();
-
+        std::chrono::duration<float, std::chrono::milliseconds::period>(
+            currentTime - prevTime)
+            .count();
 
     float forward = 0.0;
     float horizontal = 0.0;
@@ -606,8 +608,9 @@ class HelloTriangleApplication {
 
     yawChange = static_cast<float>(xoffset) * sensitivity;
     pitchChange = static_cast<float>(yoffset) * sensitivity;
-    camera.processMovement(forward * deltaTime * 100, horizontal * deltaTime * 100,
-                           yawChange, pitchChange);
+    camera.processMovement(forward * deltaTime * 100,
+                           horizontal * deltaTime * 100, yawChange,
+                           pitchChange);
   }
 
   void updateUniformBuffer(const uint32_t frameIdx) {
@@ -896,8 +899,18 @@ class HelloTriangleApplication {
                                      pipelineLayout, 0,
                                      descriptorSets[currentFrameIndex], {});
 
+
+
     commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0,
+
                               0);
+
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, meshGraphicsPipeline);
+
+    PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT =
+        (PFN_vkCmdDrawMeshTasksEXT) vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT");
+
+    vkCmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
 
     commandBuffer.endRenderPass();
     commandBuffer.end();
@@ -993,6 +1006,87 @@ class HelloTriangleApplication {
     renderPassInfo.setDependencies(dependency);
 
     renderPass = device.createRenderPass(renderPassInfo);
+  }
+
+  void createMeshGraphicsPipeline() {
+    auto taskShaderModule =
+        createShaderModule(readFile("shaders/terrain.task.spv"));
+    auto meshShaderModule =
+        createShaderModule(readFile("shaders/terrain.mesh.spv"));
+    auto fragShaderModule = createShaderModule(readFile("shaders/terrain.frag.spv"));
+
+    vk::PipelineShaderStageCreateInfo taskShaderStageInfo(
+        {}, vk::ShaderStageFlagBits::eTaskEXT, taskShaderModule, "main");
+    vk::PipelineShaderStageCreateInfo meshShaderStageInfo(
+        {}, vk::ShaderStageFlagBits::eMeshEXT, meshShaderModule, "main");
+
+    vk::PipelineShaderStageCreateInfo fragShaderStageInfo(
+        {}, vk::ShaderStageFlagBits::eFragment, fragShaderModule, "main");
+
+    std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = {
+        taskShaderStageInfo, meshShaderStageInfo, fragShaderStageInfo};
+
+    std::vector dynamicStates = {vk::DynamicState::eViewport,
+                                 vk::DynamicState::eScissor};
+    vk::PipelineDynamicStateCreateInfo dynamicState;
+    dynamicState.setDynamicStates(dynamicStates);
+
+    vk::PipelineViewportStateCreateInfo viewportStateCreateInfo({}, 1, {}, 1,
+                                                                {});
+
+    vk::PipelineRasterizationStateCreateInfo rasterizer(
+        {}, vk::False, vk::False, vk::PolygonMode::eFill,
+        vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
+        vk::False);
+    rasterizer.setLineWidth(1.0f);
+
+    vk::PipelineDepthStencilStateCreateInfo depthStencil;
+    depthStencil.setDepthTestEnable(vk::True);
+    depthStencil.setDepthWriteEnable(vk::True);
+    depthStencil.setDepthCompareOp(vk::CompareOp::eLess);
+    depthStencil.setDepthBoundsTestEnable(vk::False);
+    depthStencil.setStencilTestEnable(vk::False);
+
+    // Default Initialize, we're not using multisampling
+    vk::PipelineMultisampleStateCreateInfo multisampling;
+
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment;
+    colorBlendAttachment.blendEnable = vk::False;
+    colorBlendAttachment.colorWriteMask =
+        vk::ColorComponentFlagBits::eA | vk::ColorComponentFlagBits::eR |
+        vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB;
+
+    vk::PipelineColorBlendStateCreateInfo colorBlending;
+    colorBlending.logicOpEnable = vk::False;
+    colorBlending.setAttachments(colorBlendAttachment);
+
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
+    pipelineLayoutInfo.setSetLayouts(descriptorSetLayout);
+    pipelineLayout = device.createPipelineLayout(pipelineLayoutInfo);
+
+    vk::GraphicsPipelineCreateInfo pipelineInfo;
+    pipelineInfo.setStages(shaderStages);
+    pipelineInfo.setPViewportState(&viewportStateCreateInfo);
+    pipelineInfo.setPRasterizationState(&rasterizer);
+    pipelineInfo.setPMultisampleState(&multisampling);
+    pipelineInfo.setPColorBlendState(&colorBlending);
+    pipelineInfo.setPDynamicState(&dynamicState);
+    pipelineInfo.setPDepthStencilState(&depthStencil);
+
+    pipelineInfo.setLayout(pipelineLayout);
+    pipelineInfo.setRenderPass(renderPass);
+    pipelineInfo.setSubpass(0);
+
+    vk::Result result;
+    std::tie(result, meshGraphicsPipeline) =
+        device.createGraphicsPipeline({}, pipelineInfo);
+
+    if (result != vk::Result::eSuccess) {
+      throw std::runtime_error("Failed to create graphics pipeline\n");
+    }
+    device.destroyShaderModule(taskShaderModule);
+    device.destroyShaderModule(meshShaderModule);
+    device.destroyShaderModule(fragShaderModule);
   }
 
   void createGraphicsPipeline() {
