@@ -32,13 +32,13 @@ void main()
   vec4 basePos = vec4(0.0, 0.0, 0.0, 1.0);
   vec4 horizontalOffset = vec4(1.0, 0.0, 0.0, 0.0);
   vec4 verticalOffset = vec4(0.0, 0.0, 1.0, 0.0);
-  vec4 heightOffset = vec4(0.0, 1.0, 1.0, 0.0);
+  vec4 heightOffset = vec4(0.0, 1.0, 0.0, 0.0);
   
   SetMeshOutputsEXT(64, 98);
 
   mat4 mvp = ubo.projection * ubo.view;
   // Create grid of vertices
-  gl_MeshVerticesEXT[idx].gl_Position = mvp * (basePos + horizontalOffset * x + verticalOffset * y);
+  gl_MeshVerticesEXT[idx].gl_Position = mvp * (basePos + horizontalOffset * x + verticalOffset * y + heightOffset * ((x * y) % 11) / 11.0);
   vertexOutput[idx].color = colors[idx % 3];
   
   if (x == 7 || y == 7) return;
