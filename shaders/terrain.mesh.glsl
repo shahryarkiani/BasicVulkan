@@ -9,7 +9,7 @@ layout (binding = 0) uniform UBO
 } ubo;
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-layout(triangles, max_vertices = 64, max_primitives = 64) out;
+layout(triangles, max_vertices = 64, max_primitives = 98) out;
 
 layout(location = 0) out VertexOutput
 {
