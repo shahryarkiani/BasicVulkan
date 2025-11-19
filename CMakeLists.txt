@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-project("VulkTutorial")
+project("VulkanBasics")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,9 +33,9 @@ add_custom_target(copy_shaders ALL
         COMMENT "Compiling and copying shaders + textures to output directory"
 )
 
-add_executable(VulkTutorial "main.cpp")
-include_directories(VulkTutorial PRIVATE ${CMAKE_SOURCE_DIR}/include)
-add_dependencies(VulkTutorial copy_shaders)
+add_executable(VulkanBasics "main.cpp")
+include_directories(VulkanBasics PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_dependencies(VulkanBasics copy_shaders)
 
-target_link_libraries(VulkTutorial PRIVATE Vulkan::Vulkan)
-target_link_libraries(VulkTutorial PRIVATE glfw)
+target_link_libraries(VulkanBasics PRIVATE Vulkan::Vulkan)
+target_link_libraries(VulkanBasics PRIVATE glfw)
