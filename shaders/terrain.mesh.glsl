@@ -60,7 +60,7 @@ void main()
   float heightDiffX = (hR - hL) / (2.0 * horizontalOffset);
   float heightDiffY = (hU - hD) / (2.0 * verticalOffset);
 
-  vertexOutput[idx].color = colors[height % 3];
+  vertexOutput[idx].color = colors[0] * abs(sin(globalX)) + colors[1] * abs(cos(globalY)) + colors[2] * (getHeight(globalX, globalY) * 0.5 + 0.5);
   vertexOutput[idx].normal = normalize(vec3(heightDiffX, 1.0, heightDiffY));
   vertexOutput[idx].position = (position).xyz;
 

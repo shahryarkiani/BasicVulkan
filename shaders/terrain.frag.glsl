@@ -13,7 +13,8 @@ vec3 lightPosition = vec3(10.0, 10.0, 10.0);
 void main()
 {
 	vec3 toLight = normalize(lightPosition - vertexInput.position);
-	float lightDot = dot(toLight, vertexInput.normal);
-	outFragColor = vertexInput.color * (lightDot);
+	float lightDot = dot(toLight, normalize(vertexInput.normal));
+	lightDot = max(lightDot, 0.0);
+	outFragColor = vertexInput.color * (lightDot + 0.2);
 	outFragColor.w = 1.0;
 }
