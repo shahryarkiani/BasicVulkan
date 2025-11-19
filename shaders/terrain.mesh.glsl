@@ -24,26 +24,24 @@ const vec4[3] colors = {
 
 void main()
 {
+  SetMeshOutputsEXT(64, 98);
   uint x = gl_LocalInvocationID.x;
   uint y = gl_LocalInvocationID.y;
   uint idx = gl_LocalInvocationIndex;
 
-  // For the height offset, we need a way to calculate a global x, y for 
-  uint height = (gl_WorkGroupID.x * 7 + x) * (gl_WorkGroupID.y * 7 + y);
+  uint globalX = gl_WorkGroupID.x * 7 + x;
+  uint globalY = gl_WorkGroupID.y * 7 + y;
+
+  uint height = globalX * globalY;
 
   vec4 basePos = vec4(0.0, 0.0, 0.0, 1.0);
   vec4 horizontalOffset = vec4(1.0, 0.0, 0.0, 0.0);
   vec4 verticalOffset = vec4(0.0, 0.0, 1.0, 0.0);
   vec4 heightOffset = vec4(0.0, 1.0, 0.0, 0.0);
 
-  // Set base pos based on global invocation position
-  basePos = basePos + horizontalOffset * gl_WorkGroupID.x * 7 + verticalOffset * gl_WorkGroupID.y * 7;
-  
-  SetMeshOutputsEXT(64, 98);
-
   mat4 mvp = ubo.projection * ubo.view;
   // Create grid of vertices
-  gl_MeshVerticesEXT[idx].gl_Position = mvp * (basePos + horizontalOffset * x + verticalOffset * y + heightOffset * ((height % 13) / 13.0));
+  gl_MeshVerticesEXT[idx].gl_Position = mvp * (basePos + horizontalOffset * globalX + verticalOffset * globalY + heightOffset * ((height % 13) / 13.0));
   vertexOutput[idx].color = colors[height % 3];
   
   if (x == 7 || y == 7) return;
