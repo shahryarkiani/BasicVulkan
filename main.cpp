@@ -1344,6 +1344,7 @@ class HelloTriangleApplication {
 
     if (result == vk::Result::eErrorOutOfDateKHR || framebufferResized) {
       recreateSwapChain();
+      framebufferResized = false;
     } else if (result != vk::Result::eSuccess &&
                result != vk::Result::eSuboptimalKHR) {
       throw std::runtime_error("Failed to acquire next image index");
