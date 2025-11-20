@@ -1,5 +1,8 @@
 #version 450
 #extension GL_EXT_mesh_shader : require
+#extension GL_ARB_shading_language_include : require
+
+#include "classicnoise2D.glsl"
 
 layout (binding = 0) uniform UBO
 {
@@ -24,15 +27,29 @@ const vec4[3] colors = {
   vec4(1.0, 0.0, 0.0, 1.0)
 };
 
-const float horizontalOffset = 0.5;
-const float verticalOffset = 0.5;
+vec4 red =   vec4(1.0, 0.0, 0.0, 0.0);
+vec4 green = vec4(0.0, 1.0, 0.0, 0.0);
+vec4 blue =  vec4(0.0, 0.0, 1.0, 0.0);
+
+const float horizontalOffset = 0.05;
+const float verticalOffset = 0.05;
 const float heightOffset = 1.0;
 
 float getHeight(uint globalX, uint globalY) {
-	float x = horizontalOffset * globalX;
-	float y = verticalOffset * globalY;
+    vec2 p = vec2(globalX * horizontalOffset, globalY * verticalOffset);
 
-	return sin(x / 2.0) + cos(y/ 4.0);
+    // Low frequency noise, to provide a baseline height change
+    float baseHeight = 10.0 * cnoise(p * 0.05);
+    
+    // Higher frequency noise for local terrain variations
+    float bumpHeight = 0.01 * cnoise(p * 50.0);
+    // Some regular noise
+    float localHeight = 0.25 * cnoise(p * 0.5);
+
+    return baseHeight + localHeight + bumpHeight;
+
+    return cnoise(p) + 1.0;
+    return max(cnoise(p) + cnoise(p * 0.1), -0.5);
 }
 
 void main()
@@ -45,11 +62,11 @@ void main()
   uint globalX = gl_WorkGroupID.x * 7 + x;
   uint globalY = gl_WorkGroupID.y * 7 + y;
 
-  uint height = globalX * globalY;
+  float height = getHeight(globalX, globalY);
 
   mat4 mvp = ubo.projection * ubo.view;
   // Create grid of vertices
-  vec4 position = vec4(horizontalOffset * globalX, heightOffset * getHeight(globalX, globalY), verticalOffset * globalY, 1.0);
+  vec4 position = vec4(horizontalOffset * globalX, heightOffset * height, verticalOffset * globalY, 1.0);
   gl_MeshVerticesEXT[idx].gl_Position = mvp * position;
 
   float hR = heightOffset * getHeight(globalX - 1, globalY);
@@ -60,7 +77,11 @@ void main()
   float heightDiffX = (hR - hL) / (2.0 * horizontalOffset);
   float heightDiffY = (hU - hD) / (2.0 * verticalOffset);
 
-  vertexOutput[idx].color = colors[0] * abs(sin(globalX)) + colors[1] * abs(cos(globalY)) + colors[2] * (getHeight(globalX, globalY) * 0.5 + 0.5);
+  //vertexOutput[idx].color = vec4(0.15, 0.28, 0.38, 1.0);
+  //if(height > -0.5) 
+  vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
+  if(height > 1.7) vertexOutput[idx].color = (green + red + blue) * 0.9;
+
   vertexOutput[idx].normal = normalize(vec3(heightDiffX, 1.0, heightDiffY));
   vertexOutput[idx].position = (position).xyz;
 

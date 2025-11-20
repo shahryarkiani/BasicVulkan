@@ -66,10 +66,10 @@ struct Camera {
     glm::vec3 direction = glm::normalize(getForwardVector());
     glm::vec3 right = glm::normalize(glm::cross(direction, {0, 1, 0}));
     glm::vec3 up = {0, 1, 0};
-
-    position += direction * forward;
-    position += right * horizontal;
-    position += vertical * up;
+    const float speed = 5.0;
+    position += direction * forward * speed;
+    position += right * horizontal * speed;
+    position += vertical * up * speed;
 
 
     pitch += pitch_change;
