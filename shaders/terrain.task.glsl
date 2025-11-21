@@ -4,5 +4,5 @@
 void main()
 {
 	// TODO: Frustum Culling
-	EmitMeshTasksEXT(1000, 1000, 1);
+	EmitMeshTasksEXT(500, 500, 1);
 }

@@ -2,7 +2,7 @@
 #extension GL_EXT_mesh_shader : require
 #extension GL_ARB_shading_language_include : require
 
-#include "classicnoise2D.glsl"
+#include "psrdnoise2.glsl"
 
 layout (binding = 0) uniform UBO
 {
@@ -35,21 +35,27 @@ const float horizontalOffset = 0.05;
 const float verticalOffset = 0.05;
 const float heightOffset = 1.0;
 
-float getHeight(uint globalX, uint globalY) {
+float fbm(vec2 p, out vec2 gradientOut) {
+
+    float G = 0.5;
+    float f = 0.05;
+    float a = 10.0;
+    float t = 0.0;
+    vec2 gradient = vec2(0.0, 0.0);
+    for(int i = 0; i < 2; i++) {
+        vec2 gradientChange;
+        t += a * psrdnoise(f * p, vec2(0.0, 0.0), 0.0, gradientChange);
+        gradient += a * gradientChange;
+        f *= 2.0;
+        a *= G;
+    }
+    gradientOut = gradient;
+    return t;
+}
+
+float getHeight(uint globalX, uint globalY, out vec2 gradientOut) {
     vec2 p = vec2(globalX * horizontalOffset, globalY * verticalOffset);
-
-    // Low frequency noise, to provide a baseline height change
-    float baseHeight = 10.0 * cnoise(p * 0.05);
-    
-    // Higher frequency noise for local terrain variations
-    float bumpHeight = 0.01 * cnoise(p * 50.0);
-    // Some regular noise
-    float localHeight = 0.25 * cnoise(p * 0.5);
-
-    return baseHeight + localHeight + bumpHeight;
-
-    return cnoise(p) + 1.0;
-    return max(cnoise(p) + cnoise(p * 0.1), -0.5);
+    return fbm(p, gradientOut);
 }
 
 void main()
@@ -62,17 +68,18 @@ void main()
   uint globalX = gl_WorkGroupID.x * 7 + x;
   uint globalY = gl_WorkGroupID.y * 7 + y;
 
-  float height = getHeight(globalX, globalY);
+  vec2 gradient;
+  float height = getHeight(globalX, globalY, gradient);
 
   mat4 mvp = ubo.projection * ubo.view;
   // Create grid of vertices
   vec4 position = vec4(horizontalOffset * globalX, heightOffset * height, verticalOffset * globalY, 1.0);
   gl_MeshVerticesEXT[idx].gl_Position = mvp * position;
 
-  float hR = heightOffset * getHeight(globalX - 1, globalY);
-  float hL = heightOffset * getHeight(globalX + 1, globalY);
-  float hU = heightOffset * getHeight(globalX, globalY - 1);
-  float hD = heightOffset * getHeight(globalX, globalY + 1);
+  float hR = heightOffset * getHeight(globalX - 1, globalY, gradient);
+  float hL = heightOffset * getHeight(globalX + 1, globalY, gradient);
+  float hU = heightOffset * getHeight(globalX, globalY - 1, gradient);
+  float hD = heightOffset * getHeight(globalX, globalY + 1, gradient);
 
   float heightDiffX = (hR - hL) / (2.0 * horizontalOffset);
   float heightDiffY = (hU - hD) / (2.0 * verticalOffset);
