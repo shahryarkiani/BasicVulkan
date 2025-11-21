@@ -8,7 +8,7 @@ layout (location = 0) in VertexInput {
 
 layout(location = 0) out vec4 outFragColor;
 
-vec3 lightPosition = vec3(50.0, 15.0, 50.0);
+vec3 lightPosition = vec3(50.0, 250.0, 50.0);
 
 void main()
 {

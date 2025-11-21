@@ -31,18 +31,18 @@ vec4 red =   vec4(1.0, 0.0, 0.0, 0.0);
 vec4 green = vec4(0.0, 1.0, 0.0, 0.0);
 vec4 blue =  vec4(0.0, 0.0, 1.0, 0.0);
 
-const float horizontalOffset = 0.05;
-const float verticalOffset = 0.05;
+const float horizontalOffset = 0.1;
+const float verticalOffset = 0.1;
 const float heightOffset = 1.0;
 
 float fbm(vec2 p, out vec2 gradientOut) {
 
     float G = 0.5;
-    float f = 0.05;
+    float f = 0.01;
     float a = 10.0;
     float t = 0.0;
     vec2 gradient = vec2(0.0, 0.0);
-    for(int i = 0; i < 2; i++) {
+    for(int i = 0; i < 8; i++) {
         vec2 gradientChange;
         t += a * psrdnoise(f * p, vec2(0.0, 0.0), 0.0, gradientChange);
         gradient += a * gradientChange;
@@ -50,6 +50,7 @@ float fbm(vec2 p, out vec2 gradientOut) {
         a *= G;
     }
     gradientOut = gradient;
+    if(t < -3.5) t = -3.6;
     return t;
 }
 
@@ -84,10 +85,9 @@ void main()
   float heightDiffX = (hR - hL) / (2.0 * horizontalOffset);
   float heightDiffY = (hU - hD) / (2.0 * verticalOffset);
 
-  //vertexOutput[idx].color = vec4(0.15, 0.28, 0.38, 1.0);
-  //if(height > -0.5) 
-  vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
-  if(height > 1.7) vertexOutput[idx].color = (green + red + blue) * 0.9;
+  vertexOutput[idx].color = vec4(0.15, 0.28, 0.38, 1.0);
+  if(height > -3.5) vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
+  if(height > 5.5) vertexOutput[idx].color = (green + red + blue) * 0.9;
 
   vertexOutput[idx].normal = normalize(vec3(heightDiffX, 1.0, heightDiffY));
   vertexOutput[idx].position = (position).xyz;
