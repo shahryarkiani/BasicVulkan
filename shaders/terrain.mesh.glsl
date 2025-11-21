@@ -55,7 +55,7 @@ float fbm(vec2 p, out vec2 gradientOut) {
     return t;
 }
 
-float getHeight(uint globalX, uint globalY, out vec2 gradientOut) {
+float getHeight(int globalX, int globalY, out vec2 gradientOut) {
     vec2 p = vec2(meshPayload.basePosition.x + globalX * meshPayload.gridOffset, meshPayload.basePosition.z + globalY * meshPayload.gridOffset);
     return fbm(p, gradientOut);
 }
@@ -67,8 +67,8 @@ void main()
   uint y = gl_LocalInvocationID.y;
   uint idx = gl_LocalInvocationIndex;
 
-  uint globalX = gl_WorkGroupID.x * 7 + x;
-  uint globalY = gl_WorkGroupID.y * 7 + y;
+  int globalX = int(gl_WorkGroupID.x * 7 + x);
+  int globalY = int(gl_WorkGroupID.y * 7 + y);
 
   vec2 gradient;
   float height = getHeight(globalX, globalY, gradient);
