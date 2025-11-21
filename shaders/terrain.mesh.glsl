@@ -56,7 +56,7 @@ float fbm(vec2 p, out vec2 gradientOut) {
 }
 
 float getHeight(uint globalX, uint globalY, out vec2 gradientOut) {
-    vec2 p = vec2(meshPayload.basePosition.x + globalX * meshPayload.gridOffset, meshPayload.basePosition.y + globalY * meshPayload.gridOffset);
+    vec2 p = vec2(meshPayload.basePosition.x + globalX * meshPayload.gridOffset, meshPayload.basePosition.z + globalY * meshPayload.gridOffset);
     return fbm(p, gradientOut);
 }
 
