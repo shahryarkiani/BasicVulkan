@@ -192,7 +192,7 @@ class HelloTriangleApplication {
   std::vector<vk::DescriptorSet> descriptorSets;
 
   Camera camera = Camera{
-      {2.0f, 2.0f, 2.0f}, glm::radians(-30.f), glm::radians(-110.0f), 45};
+      {-9.0f, 15.0f, -9.0f}, glm::radians(-10.f), glm::radians(45.0f), 45};
   std::chrono::steady_clock::time_point prevTime;
   float sensitivity = 0.001;
   double lastX = 0.0, lastY = 0.0;
