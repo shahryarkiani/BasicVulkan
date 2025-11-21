@@ -583,9 +583,10 @@ class HelloTriangleApplication {
   void updateCamera() {
     const auto currentTime = std::chrono::high_resolution_clock::now();
     const float deltaTime =
-        std::chrono::duration<float, std::chrono::milliseconds::period>(
+        std::chrono::duration<float, std::chrono::seconds::period>(
             currentTime - prevTime)
             .count();
+    prevTime = currentTime;
 
     float forward = 0.0;
     float horizontal = 0.0;
@@ -919,7 +920,7 @@ class HelloTriangleApplication {
     PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT =
         (PFN_vkCmdDrawMeshTasksEXT) vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT");
 
-    vkCmdDrawMeshTasksEXT(commandBuffer, 2, 1, 1);
+    vkCmdDrawMeshTasksEXT(commandBuffer, 15, 15, 1);
 
     commandBuffer.endRenderPass();
     commandBuffer.end();
@@ -1283,7 +1284,6 @@ class HelloTriangleApplication {
     prevTime = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)) {
       glfwPollEvents();
-      prevTime = std::chrono::high_resolution_clock::now();
       updateCamera();
       drawFrame();
     }

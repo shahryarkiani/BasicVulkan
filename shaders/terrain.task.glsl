@@ -6,19 +6,40 @@
 
 taskPayloadSharedEXT MeshPayload meshPayload;
 
-layout(local_size_x = 2, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 15, local_size_y = 15, local_size_z = 1) in;
+
+layout (binding = 0) uniform UBO
+{
+  mat4 model;
+  mat4 view;
+  mat4 projection;
+} ubo;
 
 void main()
 {
+    int x = int(gl_WorkGroupID.x) - 7;
+    int y = int(gl_WorkGroupID.y) - 7;
+
+    // Each grid cube will have a size of 179.2 = baseChunkCount * baseGridOffset * 7
+    int baseGridCount = 256;
+    float baseGridOffset = 0.1;
+    float gridSize = baseGridCount * baseGridOffset * 7;
+
+    // TODO: Probably don't even need to call inverse
+    vec2 cameraPos = inverse(ubo.view)[3].xz;
+    // We want the camera to be at the center of the grid for now, this will be changed
+    // when we start doing culling
+    cameraPos -= vec2(gridSize / 2);
+
+    // We want to snap the camera pos to the nearest grid
+    vec2 snappedPos = floor(cameraPos / gridSize) * gridSize; 
+
+    vec3 basePos = vec3(gridSize * x + snappedPos.x, 0.0, gridSize * y + snappedPos.y);
+
 	// TODO: Frustum Culling
-    if (gl_WorkGroupID.x == 0) {
-        meshPayload.basePosition = vec3(0, 0, 0);
-        meshPayload.gridOffset = 0.1;
-        EmitMeshTasksEXT(256,256,1);
-    }
-    else if (gl_WorkGroupID.x == 1) {
-        meshPayload.basePosition = vec3(0, 0, 179.2);
-        meshPayload.gridOffset = 0.8;
-        EmitMeshTasksEXT(32,32,1);
-    }
+    int dist = max(abs(x), abs(y));
+    int modifier = int(pow(2.0, dist));
+    meshPayload.basePosition = basePos;
+    meshPayload.gridOffset = baseGridOffset * modifier;
+    EmitMeshTasksEXT(baseGridCount / modifier, baseGridCount / modifier,1);
 }
