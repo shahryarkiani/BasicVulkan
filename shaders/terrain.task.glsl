@@ -29,9 +29,6 @@ void main()
 
     // TODO: Probably don't even need to call inverse
     vec2 cameraPos = inverse(ubo.view)[3].xz;
-    // We want the camera to be at the center of the grid for now, this will be changed
-    // when we start doing culling
-    cameraPos -= vec2(gridSize / 2);
 
     // We want to snap the camera pos to the nearest grid
     vec2 snappedPos = floor(cameraPos / gridSize) * gridSize; 
@@ -42,11 +39,21 @@ void main()
 
     // TODO: improve frustum culling to reduce false negatives
     if(dist != 0) {
-        vec2 direction = normalize(basePos.xz - cameraPos);
-        vec2 forward = ubo.forward.xz;
-        float dot = dot(forward, direction);
-        float threshold = cos(ubo.hfov / 2 + 0.4);
-        if(dot < threshold && dist > 1) {
+        vec2 corners[4];
+        corners[0] = basePos.xz;
+        corners[1] = corners[0] + vec2(gridSize, 0);
+        corners[2] = corners[0] + vec2(gridSize, gridSize);
+        corners[3] = corners[0] + vec2(0, gridSize);
+
+        float align = 0.0;
+        for(int i = 0; i < 4; i++) {
+          vec2 direction = normalize(corners[i] - cameraPos);
+          vec2 forward = ubo.forward.xz;
+          align = max(align, dot(forward, direction));
+        }
+
+        float threshold = cos(ubo.hfov / 2);
+        if(align < threshold) {
             EmitMeshTasksEXT(0, 0, 0);
         } else {
             dist = (dist / 2) + 1;
