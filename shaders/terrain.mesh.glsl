@@ -39,19 +39,22 @@ const float heightOffset = 1.0;
 float fbm(vec2 p, out vec2 gradientOut) {
 
     float G = 0.5;
-    float f = 0.01;
-    float a = 10.0;
+    float f = 0.005;
+    float a = 40.0;
     float t = 0.0;
     vec2 gradient = vec2(0.0, 0.0);
     for(int i = 0; i < 8; i++) {
         vec2 gradientChange;
         t += a * psrdnoise(f * p, vec2(0.0, 0.0), 0.0, gradientChange);
-        gradient += a * gradientChange;
+        gradient += a * gradientChange * f;
         f *= 2.0;
         a *= G;
     }
     gradientOut = gradient;
-    if(t < -3.5) t = -3.6;
+    if(t < -35.5) {
+      t = -35.6;
+      gradientOut = vec2(0.0);
+    }
     return t;
 }
 
@@ -82,17 +85,12 @@ void main()
     );
   gl_MeshVerticesEXT[idx].gl_Position = mvp * vec4(position, 1.0);
 
-  float hR = heightOffset * getHeight(globalX - 1, globalY, gradient);
-  float hL = heightOffset * getHeight(globalX + 1, globalY, gradient);
-  float hU = heightOffset * getHeight(globalX, globalY - 1, gradient);
-  float hD = heightOffset * getHeight(globalX, globalY + 1, gradient);
-
-  float heightDiffX = (hR - hL) / (2.0 * meshPayload.gridOffset);
-  float heightDiffY = (hU - hD) / (2.0 * meshPayload.gridOffset);
+  float heightDiffX = heightOffset * -gradient.x;
+  float heightDiffY = heightOffset * -gradient.y;
 
   vertexOutput[idx].color = vec4(0.15, 0.28, 0.38, 1.0);
-  if(height > -3.5) vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
-  if(height > 5.5) vertexOutput[idx].color = (green + red + blue) * 0.9;
+  if(height > -35.5) vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
+  if(height > 25.5) vertexOutput[idx].color = (green + red + blue) * 0.9;
 
   vertexOutput[idx].normal = normalize(vec3(heightDiffX, 1.0, heightDiffY));
   vertexOutput[idx].position = position;

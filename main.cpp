@@ -920,7 +920,7 @@ class HelloTriangleApplication {
     PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT =
         (PFN_vkCmdDrawMeshTasksEXT) vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT");
 
-    vkCmdDrawMeshTasksEXT(commandBuffer, 15, 15, 1);
+    vkCmdDrawMeshTasksEXT(commandBuffer, 29, 29, 1);
 
     commandBuffer.endRenderPass();
     commandBuffer.end();

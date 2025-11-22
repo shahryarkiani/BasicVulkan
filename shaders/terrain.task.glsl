@@ -6,7 +6,7 @@
 
 taskPayloadSharedEXT MeshPayload meshPayload;
 
-layout(local_size_x = 15, local_size_y = 15, local_size_z = 1) in;
+layout(local_size_x = 29, local_size_y = 29, local_size_z = 1) in;
 
 layout (binding = 0) uniform UBO
 {
@@ -17,8 +17,8 @@ layout (binding = 0) uniform UBO
 
 void main()
 {
-    int x = int(gl_WorkGroupID.x) - 7;
-    int y = int(gl_WorkGroupID.y) - 7;
+    int x = int(gl_WorkGroupID.x) - 14;
+    int y = int(gl_WorkGroupID.y) - 14;
 
     // Each grid cube will have a size of 179.2 = baseChunkCount * baseGridOffset * 7
     int baseGridCount = 256;
@@ -38,6 +38,8 @@ void main()
 
 	// TODO: Frustum Culling
     int dist = max(abs(x), abs(y));
+    // stretch the LODs
+    if(dist != 0) dist = (dist / 2) + 1;
     int modifier = int(pow(2.0, dist));
     meshPayload.basePosition = basePos;
     meshPayload.gridOffset = baseGridOffset * modifier;
