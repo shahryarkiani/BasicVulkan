@@ -6,23 +6,25 @@
 
 taskPayloadSharedEXT MeshPayload meshPayload;
 
-layout(local_size_x = 29, local_size_y = 29, local_size_z = 1) in;
+layout(local_size_x = 49, local_size_y = 49, local_size_z = 1) in;
 
 layout (binding = 0) uniform UBO
 {
   mat4 model;
   mat4 view;
   mat4 projection;
+  vec3 forward;
+  float hfov;
 } ubo;
 
 void main()
 {
-    int x = int(gl_WorkGroupID.x) - 14;
-    int y = int(gl_WorkGroupID.y) - 14;
+    int x = int(gl_WorkGroupID.x) - 24;
+    int y = int(gl_WorkGroupID.y) - 24;
 
     // Each grid cube will have a size of 179.2 = baseChunkCount * baseGridOffset * 7
     int baseGridCount = 256;
-    float baseGridOffset = 0.1;
+    float baseGridOffset = 0.4;
     float gridSize = baseGridCount * baseGridOffset * 7;
 
     // TODO: Probably don't even need to call inverse
@@ -36,12 +38,27 @@ void main()
 
     vec3 basePos = vec3(gridSize * x + snappedPos.x, 0.0, gridSize * y + snappedPos.y);
 
-	// TODO: Frustum Culling
     int dist = max(abs(x), abs(y));
-    // stretch the LODs
-    if(dist != 0) dist = (dist / 2) + 1;
-    int modifier = int(pow(2.0, dist));
-    meshPayload.basePosition = basePos;
-    meshPayload.gridOffset = baseGridOffset * modifier;
-    EmitMeshTasksEXT(baseGridCount / modifier, baseGridCount / modifier,1);
-}
+
+    // TODO: improve frustum culling to reduce false negatives
+    if(dist != 0) {
+        vec2 direction = normalize(basePos.xz - cameraPos);
+        vec2 forward = ubo.forward.xz;
+        float dot = dot(forward, direction);
+        float threshold = cos(ubo.hfov / 2 + 0.4);
+        if(dot < threshold && dist > 1) {
+            EmitMeshTasksEXT(0, 0, 0);
+        } else {
+            dist = (dist / 3) + 1;
+            int modifier = int(pow(2.0, dist));
+            meshPayload.basePosition = basePos;
+            meshPayload.gridOffset = baseGridOffset * modifier;
+            EmitMeshTasksEXT(baseGridCount / modifier, baseGridCount / modifier,1);
+        }
+    } else {
+        int modifier = int(pow(2.0, dist));
+        meshPayload.basePosition = basePos;
+        meshPayload.gridOffset = baseGridOffset * modifier;
+        EmitMeshTasksEXT(baseGridCount / modifier, baseGridCount / modifier,1);
+    }
+}   

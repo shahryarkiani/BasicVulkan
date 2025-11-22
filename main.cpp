@@ -50,6 +50,14 @@ struct Camera {
   Camera(glm::vec3 initPosition, float pitch, float yaw, float vfov)
       : position(initPosition), pitch(pitch), yaw(yaw), vfov(vfov) {}
 
+  [[nodiscard]] glm::vec3 getFlatForwardVector() const {
+    glm::vec3 direction;
+    direction.x = cos(yaw);
+    direction.y = 0.0;
+    direction.z = sin(yaw);
+    return glm::normalize(direction);
+  }
+
   [[nodiscard]] glm::vec3 getForwardVector() const {
     glm::vec3 direction;
     direction.x = cos(pitch) * cos(yaw);
@@ -63,7 +71,7 @@ struct Camera {
   }
   void processMovement(float forward, float horizontal, float vertical, float yaw_change,
                        float pitch_change) {
-    glm::vec3 direction = glm::normalize(getForwardVector());
+    glm::vec3 direction = getForwardVector();
     glm::vec3 right = glm::normalize(glm::cross(direction, {0, 1, 0}));
     glm::vec3 up = {0, 1, 0};
     const float speed = 10.0;
@@ -121,6 +129,8 @@ struct UniformBufferObject {
   alignas(16) glm::mat4 model;
   alignas(16) glm::mat4 view;
   alignas(16) glm::mat4 proj;
+  alignas(16) glm::vec3 forward;
+  alignas(4) glm::float32 hfov;
 };
 
 class HelloTriangleApplication {
@@ -639,12 +649,17 @@ class HelloTriangleApplication {
 
     ubo.view = camera.getViewTransform();
 
+    float aspectRatio =
+        swapChainExtent.width / static_cast<float>(swapChainExtent.height);
+    float vfovRads = glm::radians(camera.vfov);
     ubo.proj = glm::perspective(
-        glm::radians(camera.vfov),
-        swapChainExtent.width / static_cast<float>(swapChainExtent.height),
-        0.1f, 5000.0f);
+        vfovRads,
+        aspectRatio,
+        0.1f, 150000.0f);
     ubo.proj[1][1] *= -1;
 
+    ubo.forward = camera.getFlatForwardVector();
+    ubo.hfov = 2.0 * atan(tan(vfovRads / 2.0) * aspectRatio);
     std::memcpy(&uniformBufferMapped[frameIdx], &ubo, sizeof(ubo));
   }
 
@@ -920,7 +935,7 @@ class HelloTriangleApplication {
     PFN_vkCmdDrawMeshTasksEXT vkCmdDrawMeshTasksEXT =
         (PFN_vkCmdDrawMeshTasksEXT) vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT");
 
-    vkCmdDrawMeshTasksEXT(commandBuffer, 29, 29, 1);
+    vkCmdDrawMeshTasksEXT(commandBuffer, 49, 49, 1);
 
     commandBuffer.endRenderPass();
     commandBuffer.end();

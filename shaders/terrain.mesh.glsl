@@ -10,6 +10,8 @@ layout (binding = 0) uniform UBO
   mat4 model;
   mat4 view;
   mat4 projection;
+  vec3 forward;
+  float hfov;
 } ubo;
 
 taskPayloadSharedEXT MeshPayload meshPayload;
@@ -39,8 +41,8 @@ const float heightOffset = 1.0;
 float fbm(vec2 p, out vec2 gradientOut) {
 
     float G = 0.5;
-    float f = 0.005;
-    float a = 40.0;
+    float f = 0.0005;
+    float a = 320.0;
     float t = 0.0;
     vec2 gradient = vec2(0.0, 0.0);
     for(int i = 0; i < 8; i++) {
@@ -51,10 +53,7 @@ float fbm(vec2 p, out vec2 gradientOut) {
         a *= G;
     }
     gradientOut = gradient;
-    if(t < -35.5) {
-      t = -35.6;
-      gradientOut = vec2(0.0);
-    }
+
     return t;
 }
 
@@ -88,9 +87,8 @@ void main()
   float heightDiffX = heightOffset * -gradient.x;
   float heightDiffY = heightOffset * -gradient.y;
 
-  vertexOutput[idx].color = vec4(0.15, 0.28, 0.38, 1.0);
-  if(height > -35.5) vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
-  if(height > 25.5) vertexOutput[idx].color = (green + red + blue) * 0.9;
+  vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
+  if(height > 295.5) vertexOutput[idx].color = (green + red + blue) * 0.9;
 
   vertexOutput[idx].normal = normalize(vec3(heightDiffX, 1.0, heightDiffY));
   vertexOutput[idx].position = position;
