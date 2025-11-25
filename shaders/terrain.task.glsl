@@ -23,8 +23,8 @@ void main()
     int y = int(gl_WorkGroupID.y) - 15;
 
     // Each grid cube will have a size of 179.2 = baseChunkCount * baseGridOffset * 7
-    int baseGridCount = 256;
-    float baseGridOffset = 0.8;
+    int baseGridCount = 384;
+    float baseGridOffset = 0.4;
     float gridSize = baseGridCount * baseGridOffset * 7;
 
     // TODO: Probably don't even need to call inverse
@@ -37,8 +37,9 @@ void main()
 
     int dist = max(abs(x), abs(y));
     if (dist != 0) dist = (dist / 2) + 1;
+    dist = min(dist, 7);
 
-    int modifier = int(pow(2.0, dist));
+    int modifier = 1 << dist;
     meshPayload.basePosition = basePos;
     meshPayload.gridOffset = baseGridOffset * modifier;
     
