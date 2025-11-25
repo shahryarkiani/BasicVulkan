@@ -580,7 +580,8 @@ class HelloTriangleApplication {
     uboLayoutBinding.setDescriptorCount(1);
     uboLayoutBinding.setStageFlags(vk::ShaderStageFlagBits::eVertex |
                                    vk::ShaderStageFlagBits::eMeshEXT |
-                                   vk::ShaderStageFlagBits::eTaskEXT);
+                                   vk::ShaderStageFlagBits::eTaskEXT |
+                                   vk::ShaderStageFlagBits::eFragment);
 
     vk::DescriptorSetLayoutCreateInfo layoutInfo;
     std::vector<vk::DescriptorSetLayoutBinding> bindings{uboLayoutBinding,

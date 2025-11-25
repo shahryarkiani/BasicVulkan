@@ -23,7 +23,7 @@ void main()
     int y = int(gl_WorkGroupID.y) - 15;
 
     // Each grid cube will have a size of 179.2 = baseChunkCount * baseGridOffset * 7
-    int baseGridCount = 512;
+    int baseGridCount = 256;
     float baseGridOffset = 0.8;
     float gridSize = baseGridCount * baseGridOffset * 7;
 
@@ -36,7 +36,12 @@ void main()
     vec3 basePos = vec3(gridSize * x + snappedPos.x, 0.0, gridSize * y + snappedPos.y);
 
     int dist = max(abs(x), abs(y));
+    if (dist != 0) dist = (dist / 2) + 1;
 
+    int modifier = int(pow(2.0, dist));
+    meshPayload.basePosition = basePos;
+    meshPayload.gridOffset = baseGridOffset * modifier;
+    
     // TODO: improve frustum culling to reduce false negatives
     if(dist != 0) {
         vec2 corners[4];
@@ -56,16 +61,9 @@ void main()
         if(align < threshold) {
             EmitMeshTasksEXT(0, 0, 0);
         } else {
-            dist = (dist / 2) + 1;
-            int modifier = int(pow(2.0, dist));
-            meshPayload.basePosition = basePos;
-            meshPayload.gridOffset = baseGridOffset * modifier;
             EmitMeshTasksEXT(baseGridCount / modifier, baseGridCount / modifier,1);
         }
     } else {
-        int modifier = int(pow(2.0, dist));
-        meshPayload.basePosition = basePos;
-        meshPayload.gridOffset = baseGridOffset * modifier;
         EmitMeshTasksEXT(baseGridCount / modifier, baseGridCount / modifier,1);
     }
 }   

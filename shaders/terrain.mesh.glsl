@@ -21,7 +21,6 @@ layout(triangles, max_vertices = 64, max_primitives = 98) out;
 
 layout(location = 0) out VertexOutput
 {
-  vec4 color;
   vec3 position;
   vec3 normal;
 } vertexOutput[];
@@ -40,7 +39,7 @@ const float heightOffset = 1.0;
 
 float fbm(vec2 p, out vec2 gradientOut) {
 
-    float G = 0.5;
+    float G = 0.45;
     float f = 0.0005;
     float a = 320.0;
     float t = 0.0;
@@ -57,8 +56,8 @@ float fbm(vec2 p, out vec2 gradientOut) {
     return t;
 }
 
-float getHeight(int globalX, int globalY, out vec2 gradientOut) {
-    vec2 p = vec2(meshPayload.basePosition.x + globalX * meshPayload.gridOffset, meshPayload.basePosition.z + globalY * meshPayload.gridOffset);
+float getHeight(float xPos, float yPos, out vec2 gradientOut) {
+    vec2 p = vec2(xPos, yPos);
     return fbm(p, gradientOut);
 }
 
@@ -72,23 +71,23 @@ void main()
   int globalX = int(gl_WorkGroupID.x * 7 + x);
   int globalY = int(gl_WorkGroupID.y * 7 + y);
 
+  float xPos = meshPayload.basePosition.x + meshPayload.gridOffset * globalX;
+  float yPos = meshPayload.basePosition.z + meshPayload.gridOffset * globalY;
+
   vec2 gradient;
-  float height = getHeight(globalX, globalY, gradient);
+  float height = getHeight(xPos, yPos, gradient);
 
   mat4 mvp = ubo.projection * ubo.view;
   // Create grid of vertices
   vec3 position = vec3(
-    meshPayload.basePosition.x + meshPayload.gridOffset * globalX,
+    xPos,
     heightOffset * height,
-    meshPayload.basePosition.z + meshPayload.gridOffset * globalY
+    yPos
     );
   gl_MeshVerticesEXT[idx].gl_Position = mvp * vec4(position, 1.0);
 
   float heightDiffX = heightOffset * -gradient.x;
   float heightDiffY = heightOffset * -gradient.y;
-
-  vertexOutput[idx].color = vec4(0.05, 0.16, 0.08, 1.0);
-  if(height > 295.5) vertexOutput[idx].color = (green + red + blue) * 0.9;
 
   vertexOutput[idx].normal = normalize(vec3(heightDiffX, 1.0, heightDiffY));
   vertexOutput[idx].position = position;
