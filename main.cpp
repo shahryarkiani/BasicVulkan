@@ -1642,7 +1642,7 @@ class HelloTriangleApplication {
       }
     }
 
-    return vk::PresentModeKHR::eImmediate;
+    return vk::PresentModeKHR::eFifo;
   }
 
   [[nodiscard]] vk::Extent2D chooseSwapExtent(

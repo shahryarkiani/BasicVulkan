@@ -63,7 +63,7 @@ void main()
 
     // Fog for distant terrain
     float distanceToCam = length(vertexInput.position - camPos);
-    float fogDensity = 0.00015;
+    float fogDensity = 0.00012;
     float fogFactor = 1.0 - exp(-distanceToCam * fogDensity);
     
     finalColor = mix(finalColor, COLOR_SKY, fogFactor);
