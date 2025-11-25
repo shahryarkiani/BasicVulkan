@@ -125,12 +125,12 @@ struct Vertex {
   }
 };
 
-struct UniformBufferObject {
+struct alignas(64) UniformBufferObject {
   alignas(16) glm::mat4 model;
   alignas(16) glm::mat4 view;
   alignas(16) glm::mat4 proj;
-  alignas(16) glm::vec3 forward;
-  alignas(4) glm::float32 hfov;
+  glm::vec3 forward;
+  float hfov;
 };
 
 class HelloTriangleApplication {
