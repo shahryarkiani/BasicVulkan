@@ -12,6 +12,7 @@ layout (binding = 0) uniform UBO
   mat4 projection;
   vec3 forward;
   float hfov;
+  float time;
 } ubo;
 
 taskPayloadSharedEXT MeshPayload meshPayload;
@@ -44,7 +45,7 @@ float fbm(vec2 p, out vec2 gradientOut) {
     float a = 320.0;
     float t = 0.0;
     vec2 gradient = vec2(0.0, 0.0);
-    for(int i = 0; i < 8; i++) {
+    for(int i = 0; i < 16; i++) {
         vec2 gradientChange;
         t += a * psrdnoise(f * p, vec2(0.0, 0.0), 0.0, gradientChange);
         gradient += a * gradientChange * f;

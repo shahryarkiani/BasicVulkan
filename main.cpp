@@ -131,6 +131,7 @@ struct alignas(64) UniformBufferObject {
   alignas(16) glm::mat4 proj;
   glm::vec3 forward;
   float hfov;
+  float time;
 };
 
 class HelloTriangleApplication {
@@ -643,6 +644,8 @@ class HelloTriangleApplication {
             .count();
 
     UniformBufferObject ubo{};
+
+    ubo.time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime.time_since_epoch()).count();
 
     // Rotate identity matrix about the Z axis based on time
     ubo.model = glm::rotate(glm::mat4(1.0f), timeDiff * glm::radians(90.0f),

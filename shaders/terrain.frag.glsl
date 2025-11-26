@@ -12,6 +12,7 @@ layout (binding = 0) uniform UBO
   mat4 projection;
   vec3 forward;
   float hfov;
+  float time;
 } ubo;
 
 layout(location = 0) out vec4 outFragColor;
@@ -63,7 +64,7 @@ void main()
 
     // Fog for distant terrain
     float distanceToCam = length(vertexInput.position - camPos);
-    float fogDensity = 0.00012;
+    float fogDensity = 0.00006;
     float fogFactor = 1.0 - exp(-distanceToCam * fogDensity);
     
     finalColor = mix(finalColor, COLOR_SKY, fogFactor);

@@ -15,6 +15,7 @@ layout (binding = 0) uniform UBO
   mat4 projection;
   vec3 forward;
   float hfov;
+  float time;
 } ubo;
 
 void main()
